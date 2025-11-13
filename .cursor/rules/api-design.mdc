@@ -1,0 +1,556 @@
+---
+description: API design guidelines and RESTful conventions for backend endpoints
+globs: "backend/apps/**/*.py"
+alwaysApply: true
+---
+# API Design
+
+Follow RESTful naming, plural resources, consistent JSON, JWT auth, permissions, input validation, rate limits, and versioning.
+
+## RESTful Naming Conventions
+
+### Endpoint Structure
+Use consistent, RESTful naming patterns:
+
+```python
+# ✅ Good RESTful endpoints
+# GET    /api/v1/transactions/           # List transactions
+# POST   /api/v1/transactions/           # Create transaction
+# GET    /api/v1/transactions/{id}/      # Get specific transaction
+# PUT    /api/v1/transactions/{id}/      # Update transaction
+# DELETE /api/v1/transactions/{id}/      # Delete transaction
+# POST   /api/v1/transactions/{id}/categorize/  # Custom action
+
+# ✅ Good URL patterns in urls.py
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from . import views
+
+router = DefaultRouter()
+router.register(r'transactions', views.TransactionViewSet)
+router.register(r'accounts', views.AccountViewSet)
+router.register(r'goals', views.GoalViewSet)
+router.register(r'budgets', views.BudgetViewSet)
+
+app_name = 'api'
+urlpatterns = [
+    path('', include(router.urls)),
+    path('accounts/<int:account_id>/sync/', views.sync_account, name='sync-account'),
+    path('transactions/<int:transaction_id>/categorize/', views.categorize_transaction, name='categorize'),
+]
+
+# ❌ Bad non-RESTful endpoints
+# GET    /api/v1/getTransactions/
+# POST   /api/v1/createTransaction/
+# GET    /api/v1/transactionDetails/{id}/
+# POST   /api/v1/deleteTransaction/
+```
+
+### Resource Naming
+Use plural nouns for collections and be consistent:
+
+```python
+# ✅ Good resource naming
+/api/v1/transactions/          # Collection of transactions
+/api/v1/accounts/              # Collection of accounts
+/api/v1/goals/                # Collection of savings goals
+/api/v1/budgets/               # Collection of budgets
+/api/v1/categories/           # Collection of categories
+
+# ❌ Bad resource naming
+/api/v1/transaction/          # Should be plural
+/api/v1/account/              # Should be plural
+/api/v1/goal/                 # Should be plural
+/api/v1/budget/               # Should be plural
+/api/v1/transactionCategory/  # Should be kebab-case and plural
+```
+
+## Response Format Standards
+
+### Consistent JSON Structure
+Always return consistent JSON responses:
+
+```python
+# ✅ Good consistent response format
+from rest_framework.response import Response
+from rest_framework import status
+
+def create_transaction(request):
+    try:
+        serializer = TransactionCreateSerializer(data=request.data)
+        if serializer.is_valid():
+            transaction = serializer.save(user=request.user)
+            return Response({
+                'status': 'success',
+                'data': {
+                    'id': transaction.id,
+                    'merchant_name': transaction.merchant_name,
+                    'amount': str(transaction.amount),
+                    'date': transaction.date,
+                    'created_at': transaction.created_at
+                },
+                'message': 'Transaction created successfully'
+            }, status=status.HTTP_201_CREATED)
+        else:
+            return Response({
+                'status': 'error',
+                'data': serializer.errors,
+                'message': 'Validation failed'
+            }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'data': None,
+            'message': 'An unexpected error occurred'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# ✅ Good list response format
+def list_transactions(request):
+    transactions = Transaction.objects.for_user(request.user)
+    serializer = TransactionListSerializer(transactions, many=True)
+    
+    return Response({
+        'status': 'success',
+        'data': {
+            'transactions': serializer.data,
+            'count': len(serializer.data),
+            'page': 1,
+            'total_pages': 1
+        },
+        'message': 'Transactions retrieved successfully'
+    })
+
+# ❌ Bad inconsistent response format
+def create_summary_bad(request):
+    summary = Summary.objects.create(...)
+    return Response({
+        'summary': summary,  # Inconsistent structure
+        'success': True       # Different field names
+    })
+```
+
+### Error Response Format
+Use consistent error response structure:
+
+```python
+# ✅ Good error response format
+from rest_framework.views import exception_handler
+from rest_framework.response import Response
+
+def custom_exception_handler(exc, context):
+    response = exception_handler(exc, context)
+    
+    if response is not None:
+        custom_response_data = {
+            'status': 'error',
+            'data': None,
+            'message': 'An error occurred',
+            'errors': response.data if isinstance(response.data, dict) else {'detail': response.data},
+            'code': response.status_code
+        }
+        response.data = custom_response_data
+    
+    return response
+
+# ✅ Good validation error format
+class TransactionCreateSerializer(serializers.ModelSerializer):
+    def validate_amount(self, value):
+        if value == 0:
+            raise serializers.ValidationError({
+                'amount': ['Transaction amount cannot be zero']
+            })
+        return value
+    
+    def validate_merchant_name(self, value):
+        if len(value) < 2:
+            raise serializers.ValidationError({
+                'merchant_name': ['Merchant name must be at least 2 characters long']
+            })
+        return value
+    
+    def validate(self, data):
+        # Ensure account belongs to user
+        account = data.get('account')
+        if account and account.user != self.context['request'].user:
+            raise serializers.ValidationError({
+                'non_field_errors': ['Account does not belong to user']
+            })
+        return data
+```
+
+## Authentication and Authorization
+
+### JWT Authentication
+Implement consistent JWT authentication patterns:
+
+```python
+# ✅ Good JWT authentication
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import permission_classes
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
+class TransactionViewSet(viewsets.ModelViewSet):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        return Transaction.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+# ✅ Good account ownership validation
+def create_transaction_with_account(request):
+    account_id = request.data.get('account')
+    
+    if not account_id:
+        return Response({
+            'status': 'error',
+            'data': None,
+            'message': 'Account ID required'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Verify account belongs to user
+    try:
+        account = Account.objects.get(id=account_id, user=request.user)
+    except Account.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'data': None,
+            'message': 'Account not found or does not belong to user'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Create transaction
+    transaction = Transaction.objects.create(
+        user=request.user,
+        account=account,
+        merchant_name=request.data.get('merchant_name'),
+        amount=request.data.get('amount'),
+        date=request.data.get('date')
+    )
+    
+    return Response({
+        'status': 'success',
+        'data': {'id': transaction.id},
+        'message': 'Transaction created successfully'
+    })
+```
+
+### Permission Classes
+Create reusable permission classes:
+
+```python
+# ✅ Good permission classes
+from rest_framework.permissions import BasePermission
+
+class IsOwnerOrReadOnly(BasePermission):
+    """
+    Custom permission to only allow owners to edit their objects.
+    """
+    def has_object_permission(self, request, view, obj):
+        # Read permissions for any request
+        if request.method in ['GET', 'HEAD', 'OPTIONS']:
+            return True
+        
+        # Write permissions only to the owner
+        return obj.user == request.user
+
+class IsAccountOwner(BasePermission):
+    """
+    Allow only the owner of the account to access it.
+    """
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        
+        # For account-specific views, check ownership
+        if hasattr(view, 'get_object'):
+            account = view.get_object()
+            return account.user == request.user
+        
+        return True
+
+# Usage in views
+class TransactionViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsOwnerOrReadOnly]
+    
+    def get_permissions(self):
+        if self.action == 'create':
+            permission_classes = [IsAuthenticated]
+        else:
+            permission_classes = [IsOwnerOrReadOnly]
+        
+        return [permission() for permission in permission_classes]
+```
+
+## Input Validation
+
+### Request Validation
+Implement comprehensive input validation:
+
+```python
+# ✅ Good input validation
+class AccountConnectionSerializer(serializers.Serializer):
+    plaid_access_token = serializers.CharField(required=True)
+    institution_id = serializers.CharField(required=True)
+    institution_name = serializers.CharField(required=False)
+    
+    def validate_plaid_access_token(self, value):
+        # Validate Plaid token format
+        if not value or len(value) < 20:
+            raise serializers.ValidationError('Invalid Plaid access token format')
+        return value
+    
+    def validate(self, data):
+        # Additional validation can be added here
+        # e.g., check if account already exists for this institution
+        return data
+
+# ✅ Good view validation
+class AccountConnectionView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        serializer = AccountConnectionSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response({
+                'status': 'error',
+                'data': serializer.errors,
+                'message': 'Validation failed'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Process validated data
+        plaid_token = serializer.validated_data['plaid_access_token']
+        institution_id = serializer.validated_data['institution_id']
+        
+        # Create account with encrypted token
+        account = Account.objects.create(
+            user=request.user,
+            institution_name=institution_id,
+            plaid_access_token=encrypt_token(plaid_token),  # Encrypt before storing
+            is_active=True
+        )
+        
+        # Start syncing transactions
+        sync_account_transactions.delay(account.id)
+        
+        return Response({
+            'status': 'success',
+            'data': {
+                'id': account.id,
+                'institution_name': institution_id,
+                'is_active': account.is_active
+            },
+            'message': 'Account connected successfully'
+        }, status=status.HTTP_201_CREATED)
+```
+
+## Rate Limiting and Usage Limits
+
+### Usage Limit Enforcement
+Implement usage limits for different user tiers:
+
+```python
+# ✅ Good usage limit enforcement
+from django.core.exceptions import PermissionDenied
+
+class UsageLimitMixin:
+    def check_usage_limits(self, request, operation_type):
+        if request.user.is_authenticated:
+            user = request.user
+            subscription = user.subscription
+        else:
+            # Guest limits
+            guest_session_id = request.data.get('guest_session_id')
+            if not guest_session_id:
+                raise PermissionDenied('Guest session required')
+            
+            # Check guest usage
+            guest_usage = get_guest_usage(guest_session_id)
+            if guest_usage['summaries'] >= 3:  # Guest limit
+                raise PermissionDenied('Guest usage limit exceeded')
+            return
+        
+        # Check subscription limits
+        if operation_type == 'account_connection':
+            if subscription.tier == 'free':
+                if user.accounts.count() >= 1:
+                    raise PermissionDenied('Free tier limit: 1 account')
+            elif subscription.tier == 'pro':
+                if user.accounts.count() >= 10:
+                    raise PermissionDenied('Pro tier limit: 10 accounts')
+
+class AccountViewSet(UsageLimitMixin, viewsets.ModelViewSet):
+    def create(self, request, *args, **kwargs):
+        # Check usage limits before creation
+        self.check_usage_limits(request, 'account_connection')
+        
+        return super().create(request, *args, **kwargs)
+```
+
+## WebSocket Integration
+
+### WebSocket Event Structure
+Use consistent WebSocket event patterns:
+
+```python
+# ✅ Good WebSocket event structure
+from channels.generic.websocket import AsyncWebsocketConsumer
+import json
+
+class AccountSyncConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.account_id = self.scope['url_route']['kwargs']['account_id']
+        self.group_name = f'account_{self.account_id}'
+        
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+        
+        await self.accept()
+        
+        # Send initial status
+        await self.send_status_update('connected')
+    
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(
+            self.group_name,
+            self.channel_name
+        )
+    
+    async def receive(self, text_data):
+        data = json.loads(text_data)
+        
+        if data['type'] == 'ping':
+            await self.send(text_data=json.dumps({
+                'type': 'pong',
+                'timestamp': timezone.now().isoformat()
+            }))
+    
+    async def send_status_update(self, status):
+        await self.send(text_data=json.dumps({
+            'type': 'status_update',
+            'status': status,
+            'timestamp': timezone.now().isoformat()
+        }))
+    
+    async def send_sync_progress(self, progress):
+        await self.send(text_data=json.dumps({
+            'type': 'sync_progress',
+            'progress': progress,
+            'timestamp': timezone.now().isoformat()
+        }))
+    
+    async def send_sync_complete(self, sync_data):
+        await self.send(text_data=json.dumps({
+            'type': 'sync_complete',
+            'data': sync_data,
+            'timestamp': timezone.now().isoformat()
+        }))
+```
+
+## API Versioning
+
+### Version Management
+Implement proper API versioning:
+
+```python
+# ✅ Good API versioning
+# config/urls.py
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/v1/', include('apps.api.urls')),
+    path('api/v2/', include('apps.api.v2.urls')),  # Future version
+]
+
+# ✅ Good version-specific serializers
+class TransactionV1Serializer(serializers.ModelSerializer):
+    class Meta:
+        model = Transaction
+        fields = ['id', 'merchant_name', 'amount', 'date', 'created_at']
+
+class TransactionV2Serializer(serializers.ModelSerializer):
+    # Enhanced version with additional fields
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    account_name = serializers.CharField(source='account.institution_name', read_only=True)
+    formatted_amount = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Transaction
+        fields = ['id', 'merchant_name', 'amount', 'formatted_amount', 'date', 'category_name', 'account_name', 'created_at']
+    
+    def get_formatted_amount(self, obj):
+        return f"${abs(obj.amount):,.2f}"
+```
+
+## Documentation
+
+### API Documentation
+Use DRF's built-in documentation features:
+
+```python
+# ✅ Good API documentation
+from rest_framework import serializers, viewsets
+from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
+
+class TransactionViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing transactions.
+    
+    Provides CRUD operations for user transactions with support for
+    filtering, categorization, and account management.
+    """
+    
+    @swagger_auto_schema(
+        operation_description="Create a new transaction",
+        request_body=TransactionCreateSerializer,
+        responses={
+            201: openapi.Response('Transaction created', TransactionSerializer),
+            400: openapi.Response('Validation error'),
+            401: openapi.Response('Authentication required'),
+        }
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+    
+    @swagger_auto_schema(
+        operation_description="Categorize a transaction",
+        responses={
+            200: openapi.Response('Transaction categorized'),
+            400: openapi.Response('Invalid category'),
+            404: openapi.Response('Transaction not found'),
+        }
+    )
+    @action(detail=True, methods=['post'])
+    def categorize(self, request, pk=None):
+        """Categorize the transaction."""
+        transaction = self.get_object()
+        category_id = request.data.get('category_id')
+        
+        if not category_id:
+            return Response({
+                'status': 'error',
+                'message': 'Category ID required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        transaction.category_id = category_id
+        transaction.save()
+        
+        return Response({
+            'status': 'success',
+            'message': 'Transaction categorized'
+        })
+```
+
+## Rationale
+
+API design guidelines ensure:
+- **Consistency** - Predictable endpoint structure and response format
+- **Usability** - Clear, intuitive API that's easy to integrate with
+- **Security** - Proper authentication, authorization, and input validation
+- **Scalability** - Versioning and rate limiting support future growth
+- **Maintainability** - Consistent patterns make the API easier to maintain
+- **Documentation** - Clear API documentation improves developer experience

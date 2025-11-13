@@ -1,0 +1,798 @@
+---
+description: React development guidelines and best practices for frontend components
+alwaysApply: false
+---
+# React Guidelines
+
+This rule enforces React development guidelines and best practices for the Cashly frontend application.
+
+## Component Structure
+
+### Functional Components
+Always use functional components with hooks:
+
+```jsx
+// ✅ Good functional component structure
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+// Components
+import Button from '../common/Button';
+import LoadingSpinner from '../common/LoadingSpinner';
+import ErrorMessage from '../common/ErrorMessage';
+
+// Hooks
+import { useAuth } from '../../hooks/useAuth';
+import { useTransactions } from '../../hooks/useTransactions';
+import { useAccounts } from '../../hooks/useAccounts';
+
+// Utils
+import { connectAccount, syncAccount } from '../../utils/api';
+import { formatCurrency } from '../../utils/formatters';
+
+// Constants
+const REFRESH_INTERVAL = 30000; // 30 seconds
+
+function Dashboard() {
+    // State
+    const [selectedAccount, setSelectedAccount] = useState(null);
+    const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState(null);
+    
+    // Hooks
+    const { user, isAuthenticated } = useAuth();
+    const navigate = useNavigate();
+    const { transactions, isLoading, refetch } = useTransactions();
+    const { accounts, connectAccount: connect } = useAccounts();
+    
+    // Effects
+    useEffect(() => {
+        if (!isAuthenticated) {
+            navigate('/login');
+            return;
+        }
+        
+        // Auto-refresh transactions every 30 seconds
+        const interval = setInterval(() => {
+            refetch();
+        }, REFRESH_INTERVAL);
+        
+        return () => clearInterval(interval);
+    }, [isAuthenticated, navigate, refetch]);
+    
+    // Event handlers
+    const handleConnectAccount = useCallback(async () => {
+        setRefreshing(true);
+        setError(null);
+        
+        try {
+            await connect();
+            await refetch();
+        } catch (err) {
+            setError(err.message || 'Failed to connect account');
+        } finally {
+            setRefreshing(false);
+        }
+    }, [connect, refetch]);
+    
+    const handleSyncAccount = useCallback(async (accountId) => {
+        setRefreshing(true);
+        setError(null);
+        
+        try {
+            await syncAccount(accountId);
+            await refetch();
+        } catch (err) {
+            setError(err.message || 'Failed to sync account');
+        } finally {
+            setRefreshing(false);
+        }
+    }, [refetch]);
+    
+    // Render
+    if (!isAuthenticated) {
+        return null;
+    }
+    
+    const totalBalance = accounts.reduce((sum, acc) => sum + parseFloat(acc.balance), 0);
+    
+    return (
+        <div className="dashboard">
+            <h1>Dashboard</h1>
+            
+            <div className="account-summary">
+                <h2>Total Balance</h2>
+                <p className="balance">{formatCurrency(totalBalance)}</p>
+            </div>
+            
+            {accounts.length === 0 && (
+                <div className="empty-state">
+                    <p>No accounts connected</p>
+                    <Button onClick={handleConnectAccount} disabled={refreshing}>
+                        Connect Account
+                    </Button>
+                </div>
+            )}
+            
+            {error && <ErrorMessage message={error} />}
+            
+            {isLoading && <LoadingSpinner />}
+            
+            {transactions && transactions.length > 0 && (
+                <div className="recent-transactions">
+                    <h2>Recent Transactions</h2>
+                    <TransactionList transactions={transactions.slice(0, 10)} />
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default Dashboard;
+```
+
+### Component Props
+Use TypeScript-style prop validation and destructuring:
+
+```jsx
+// ✅ Good prop handling
+import React from 'react';
+import PropTypes from 'prop-types';
+
+function TransactionCard({ 
+    transaction, 
+    onEdit, 
+    onDelete, 
+    showActions = true,
+    className = ''
+}) {
+    const { merchant_name, amount, date, category, notes } = transaction;
+    
+    return (
+        <div className={`transaction-card ${className}`}>
+            <div className="transaction-header">
+                <h3>{merchant_name}</h3>
+                <span className={`amount ${amount < 0 ? 'expense' : 'income'}`}>
+                    {formatCurrency(amount)}
+                </span>
+            </div>
+            
+            <p className="transaction-date">
+                {new Date(date).toLocaleDateString()}
+            </p>
+            
+            {category && (
+                <span className="category-badge">
+                    {category.name}
+                </span>
+            )}
+            
+            {notes && (
+                <p className="transaction-notes">{notes}</p>
+            )}
+            
+            {showActions && (
+                <div className="actions">
+                    <Button onClick={() => onEdit(transaction.id)}>
+                        Edit
+                    </Button>
+                    <Button 
+                        variant="danger" 
+                        onClick={() => onDelete(transaction.id)}
+                    >
+                        Delete
+                    </Button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+TransactionCard.propTypes = {
+    transaction: PropTypes.shape({
+        id: PropTypes.number.isRequired,
+        merchant_name: PropTypes.string.isRequired,
+        amount: PropTypes.number.isRequired,
+        date: PropTypes.string.isRequired,
+        category: PropTypes.object,
+        notes: PropTypes.string,
+    }).isRequired,
+    onEdit: PropTypes.func.isRequired,
+    onDelete: PropTypes.func.isRequired,
+    showActions: PropTypes.bool,
+    className: PropTypes.string,
+};
+
+export default TransactionCard;
+```
+
+## Hooks Guidelines
+
+### Custom Hooks
+Create reusable custom hooks for complex logic:
+
+```jsx
+// ✅ Good custom hook structure
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useAuth } from './useAuth';
+import { api } from '../utils/api';
+
+function useTransactions(filters = {}) {
+    // State
+    const [transactions, setTransactions] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+    
+    // Refs
+    const abortControllerRef = useRef(null);
+    
+    // Dependencies
+    const { token } = useAuth();
+    
+    // Constants
+    const REFRESH_INTERVAL = 30000; // 30 seconds
+    
+    // Callbacks
+    const fetchTransactions = useCallback(async () => {
+        if (!token) {
+            setIsLoading(false);
+            return;
+        }
+        
+        // Cancel previous request
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        
+        abortControllerRef.current = new AbortController();
+        
+        try {
+            setIsLoading(true);
+            setError(null);
+            
+            const response = await api.getTransactions(filters, {
+                signal: abortControllerRef.current.signal
+            });
+            
+            setTransactions(response.data.transactions);
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                setError(err.message || 'Failed to fetch transactions');
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    }, [token, filters]);
+    
+    const refetch = useCallback(() => {
+        fetchTransactions();
+    }, [fetchTransactions]);
+    
+    // Effects
+    useEffect(() => {
+        fetchTransactions();
+        
+        // Auto-refresh transactions
+        const interval = setInterval(() => {
+            fetchTransactions();
+        }, REFRESH_INTERVAL);
+        
+        return () => {
+            clearInterval(interval);
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
+    }, [fetchTransactions]);
+    
+    // Return hook interface
+    return {
+        transactions,
+        isLoading,
+        error,
+        refetch
+    };
+}
+
+export { useTransactions };
+```
+
+### Hook Dependencies
+Always specify correct dependencies in useEffect:
+
+```jsx
+// ✅ Good dependency management
+function TransactionList() {
+    const [transactions, setTransactions] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const { user } = useAuth();
+    
+    // Fetch transactions when user changes
+    useEffect(() => {
+        if (!user) {
+            setTransactions([]);
+            setLoading(false);
+            return;
+        }
+        
+        const fetchTransactions = async () => {
+            try {
+                setLoading(true);
+                const data = await api.getTransactions({ user_id: user.id });
+                setTransactions(data);
+            } catch (error) {
+                console.error('Failed to fetch transactions:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        
+        fetchTransactions();
+    }, [user]); // Only depend on user
+    
+    // Don't do this - it will cause infinite re-renders
+    // useEffect(() => {
+    //     fetchTransactions();
+    // }, [transactions]); // ❌ Bad - depends on state it updates
+}
+```
+
+## State Management
+
+### useState Guidelines
+Use useState appropriately and avoid unnecessary re-renders:
+
+```jsx
+// ✅ Good state management
+function TransactionForm() {
+    const [formData, setFormData] = useState({
+        merchant_name: '',
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        category: '',
+        notes: ''
+    });
+    const [errors, setErrors] = useState({});
+    const [submitting, setSubmitting] = useState(false);
+    
+    const handleInputChange = useCallback((field, value) => {
+        setFormData(prev => ({
+            ...prev,
+            [field]: value
+        }));
+        
+        // Clear error when user starts typing
+        if (errors[field]) {
+            setErrors(prev => ({
+                ...prev,
+                [field]: null
+            }));
+        }
+    }, [errors]);
+    
+    const handleSubmit = useCallback(async (event) => {
+        event.preventDefault();
+        
+        // Validate form
+        const newErrors = validateTransactionForm(formData);
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            return;
+        }
+        
+        setSubmitting(true);
+        try {
+            await submitTransaction(formData);
+            // Reset form on success
+            setFormData({ 
+                merchant_name: '', 
+                amount: '', 
+                date: new Date().toISOString().split('T')[0],
+                category: '',
+                notes: '' 
+            });
+            setErrors({});
+        } catch (error) {
+            setErrors({ submit: error.message });
+        } finally {
+            setSubmitting(false);
+        }
+    }, [formData]);
+    
+    return (
+        <form onSubmit={handleSubmit}>
+            <input
+                type="text"
+                value={formData.merchant_name}
+                onChange={(e) => handleInputChange('merchant_name', e.target.value)}
+                placeholder="Merchant Name"
+            />
+            {errors.merchant_name && <span className="error">{errors.merchant_name}</span>}
+            
+            <input
+                type="number"
+                step="0.01"
+                value={formData.amount}
+                onChange={(e) => handleInputChange('amount', e.target.value)}
+                placeholder="Amount"
+            />
+            {errors.amount && <span className="error">{errors.amount}</span>}
+            
+            <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => handleInputChange('date', e.target.value)}
+            />
+            
+            <select
+                value={formData.category}
+                onChange={(e) => handleInputChange('category', e.target.value)}
+            >
+                <option value="">Select Category</option>
+                {/* Categories will be populated from API */}
+            </select>
+            
+            <textarea
+                value={formData.notes}
+                onChange={(e) => handleInputChange('notes', e.target.value)}
+                placeholder="Notes (optional)"
+            />
+            
+            <button type="submit" disabled={submitting}>
+                {submitting ? 'Submitting...' : 'Add Transaction'}
+            </button>
+        </form>
+    );
+}
+```
+
+### Context Usage
+Use Context for global state that needs to be shared:
+
+```jsx
+// ✅ Good context structure
+import React, { createContext, useContext, useReducer } from 'react';
+
+// Context
+const AuthContext = createContext();
+
+// Reducer
+function authReducer(state, action) {
+    switch (action.type) {
+        case 'LOGIN_SUCCESS':
+            return {
+                ...state,
+                user: action.user,
+                token: action.token,
+                isAuthenticated: true,
+                loading: false
+            };
+        case 'LOGIN_FAILURE':
+            return {
+                ...state,
+                user: null,
+                token: null,
+                isAuthenticated: false,
+                error: action.error,
+                loading: false
+            };
+        case 'LOGOUT':
+            return {
+                ...state,
+                user: null,
+                token: null,
+                isAuthenticated: false,
+                error: null,
+                loading: false
+            };
+        case 'SET_LOADING':
+            return {
+                ...state,
+                loading: action.loading
+            };
+        default:
+            return state;
+    }
+}
+
+// Provider
+function AuthProvider({ children }) {
+    const [state, dispatch] = useReducer(authReducer, {
+        user: null,
+        token: null,
+        isAuthenticated: false,
+        error: null,
+        loading: true
+    });
+    
+    const login = async (credentials) => {
+        dispatch({ type: 'SET_LOADING', loading: true });
+        try {
+            const response = await api.login(credentials);
+            dispatch({
+                type: 'LOGIN_SUCCESS',
+                user: response.user,
+                token: response.token
+            });
+        } catch (error) {
+            dispatch({
+                type: 'LOGIN_FAILURE',
+                error: error.message
+            });
+        }
+    };
+    
+    const logout = () => {
+        dispatch({ type: 'LOGOUT' });
+        // Clear token from storage
+        localStorage.removeItem('token');
+    };
+    
+    const value = {
+        ...state,
+        login,
+        logout
+    };
+    
+    return (
+        <AuthContext.Provider value={value}>
+            {children}
+        </AuthContext.Provider>
+    );
+}
+
+// Hook
+function useAuth() {
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
+}
+
+export { AuthProvider, useAuth };
+```
+
+## Styling Guidelines
+
+### Tailwind CSS Usage
+Use Tailwind classes consistently and create reusable components:
+
+```jsx
+// ✅ Good Tailwind usage
+function Button({ 
+    children, 
+    variant = 'primary', 
+    size = 'medium', 
+    disabled = false,
+    className = '',
+    ...props 
+}) {
+    const baseClasses = 'font-medium rounded-lg transition-colors focus:outline-none focus:ring-2';
+    
+    const variantClasses = {
+        primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
+        secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500',
+        danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
+        outline: 'border-2 border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-blue-500'
+    };
+    
+    const sizeClasses = {
+        small: 'px-3 py-1.5 text-sm',
+        medium: 'px-4 py-2 text-base',
+        large: 'px-6 py-3 text-lg'
+    };
+    
+    const disabledClasses = disabled 
+        ? 'opacity-50 cursor-not-allowed' 
+        : 'cursor-pointer';
+    
+    const classes = [
+        baseClasses,
+        variantClasses[variant],
+        sizeClasses[size],
+        disabledClasses,
+        className
+    ].join(' ');
+    
+    return (
+        <button
+            className={classes}
+            disabled={disabled}
+            {...props}
+        >
+            {children}
+        </button>
+    );
+}
+
+// ✅ Good component composition
+function TransactionCard({ transaction, onEdit, onDelete }) {
+    return (
+        <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+            <div className="flex justify-between items-start mb-4">
+                <div>
+                    <h3 className="text-xl font-semibold text-gray-900">
+                        {transaction.merchant_name}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                        {new Date(transaction.date).toLocaleDateString()}
+                    </p>
+                </div>
+                <div className="flex items-center space-x-4">
+                    <span className={`text-lg font-bold ${
+                        transaction.amount < 0 
+                            ? 'text-red-600'
+                            : 'text-green-600'
+                    }`}>
+                        {formatCurrency(transaction.amount)}
+                    </span>
+                    <div className="flex space-x-2">
+                        <Button
+                            variant="outline"
+                            size="small"
+                            onClick={() => onEdit(transaction.id)}
+                        >
+                            Edit
+                        </Button>
+                        <Button
+                            variant="danger"
+                            size="small"
+                            onClick={() => onDelete(transaction.id)}
+                        >
+                            Delete
+                        </Button>
+                    </div>
+                </div>
+            </div>
+            
+            {transaction.category && (
+                <span className="inline-block px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800 mb-2">
+                    {transaction.category.name}
+                </span>
+            )}
+            
+            {transaction.notes && (
+                <p className="text-gray-600 text-sm">
+                    {transaction.notes}
+                </p>
+            )}
+        </div>
+    );
+}
+```
+
+## Performance Guidelines
+
+### Memoization
+Use React.memo and useMemo appropriately:
+
+```jsx
+// ✅ Good memoization usage
+import React, { memo, useMemo } from 'react';
+
+const TransactionList = memo(function TransactionList({ transactions, onTransactionClick }) {
+    // Memoize expensive calculations
+    const sortedTransactions = useMemo(() => {
+        return transactions.sort((a, b) => 
+            new Date(b.date) - new Date(a.date)
+        );
+    }, [transactions]);
+    
+    // Memoize filtered results
+    const expenseTransactions = useMemo(() => {
+        return sortedTransactions.filter(t => t.amount < 0);
+    }, [sortedTransactions]);
+    
+    return (
+        <div className="transaction-list">
+            {expenseTransactions.map(transaction => (
+                <TransactionCard
+                    key={transaction.id}
+                    transaction={transaction}
+                    onClick={() => onTransactionClick(transaction.id)}
+                />
+            ))}
+        </div>
+    );
+});
+
+// ✅ Good callback memoization
+function TransactionPage({ transactionId }) {
+    const [transaction, setTransaction] = useState(null);
+    
+    const handleUpdateCategory = useCallback(async (categoryId) => {
+        try {
+            await api.updateTransactionCategory(transactionId, categoryId);
+            // Refresh transaction data
+            const updatedTransaction = await api.getTransaction(transactionId);
+            setTransaction(updatedTransaction);
+        } catch (error) {
+            console.error('Failed to update transaction category:', error);
+        }
+    }, [transactionId]);
+    
+    return (
+        <div>
+            {transaction && (
+                <TransactionCard
+                    transaction={transaction}
+                    onEdit={handleUpdateCategory}
+                />
+            )}
+        </div>
+    );
+}
+```
+
+## Error Handling
+
+### Error Boundaries
+Implement error boundaries for graceful error handling:
+
+```jsx
+// ✅ Good error boundary
+import React from 'react';
+
+class ErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+    
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
+    
+    componentDidCatch(error, errorInfo) {
+        console.error('Error caught by boundary:', error, errorInfo);
+        // Log to error reporting service
+        // logErrorToService(error, errorInfo);
+    }
+    
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="error-boundary">
+                    <h2>Something went wrong</h2>
+                    <p>We're sorry, but something unexpected happened.</p>
+                    <button onClick={() => window.location.reload()}>
+                        Reload Page
+                    </button>
+                </div>
+            );
+        }
+        
+        return this.props.children;
+    }
+}
+
+// Usage
+function App() {
+    return (
+        <ErrorBoundary>
+            <Router>
+                <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/transactions" element={<TransactionListPage />} />
+                    <Route path="/transactions/:id" element={<TransactionPage />} />
+                    <Route path="/goals" element={<GoalsPage />} />
+                    <Route path="/analytics" element={<AnalyticsPage />} />
+                </Routes>
+            </Router>
+        </ErrorBoundary>
+    );
+}
+```
+
+## Rationale
+
+React guidelines ensure:
+- **Consistent patterns** - Predictable component structure and behavior
+- **Better performance** - Proper use of hooks, memoization, and state management
+- **Maintainability** - Clear separation of concerns and reusable components
+- **User experience** - Proper error handling and loading states for financial data
+- **Team collaboration** - Familiar React patterns reduce learning curve
+- **Code quality** - TypeScript-style prop validation and error boundaries
+- **Financial data security** - Proper handling and display of sensitive financial information

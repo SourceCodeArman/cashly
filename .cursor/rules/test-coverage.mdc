@@ -1,0 +1,1103 @@
+---
+description: Test coverage guidelines and testing best practices
+alwaysApply: false
+---
+# Test Coverage
+
+This rule enforces comprehensive test coverage guidelines and testing best practices for the Cashly platform.
+
+## Coverage Requirements
+
+### Minimum Coverage Thresholds
+Maintain high test coverage across all components:
+
+```python
+# ✅ Good coverage configuration in pytest.ini
+[tool:pytest]
+DJANGO_SETTINGS_MODULE = config.settings.test
+python_files = tests.py test_*.py *_tests.py
+python_classes = Test*
+python_functions = test_*
+addopts = 
+    --cov=apps
+    --cov-report=html
+    --cov-report=term-missing
+    --cov-fail-under=85
+    --cov-branch
+    --cov-branch-fail-under=80
+
+# ✅ Good coverage configuration in frontend/package.json
+{
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "test:ui": "vitest --ui"
+  },
+  "vitest": {
+    "coverage": {
+      "thresholds": {
+        "lines": 85,
+        "functions": 90,
+        "branches": 80,
+        "statements": 85
+      }
+    }
+  }
+}
+```
+
+### Coverage Targets by Component
+Different components have different coverage requirements:
+
+```python
+# ✅ Good component-specific coverage targets
+# Backend Models: 95% line coverage
+# Backend Views: 90% line coverage  
+# Backend Serializers: 95% line coverage
+# Backend Tasks: 85% line coverage
+# Frontend Components: 80% line coverage
+# Frontend Hooks: 90% line coverage
+# Frontend Utils: 95% line coverage
+```
+
+## Backend Testing
+
+### Model Testing
+Comprehensive model testing with factories:
+
+```python
+# ✅ Good model testing
+import pytest
+from django.test import TestCase
+from django.core.exceptions import ValidationError
+from factory import Faker, SubFactory
+from factory.django import DjangoModelFactory
+
+from apps.accounts.models import User, Account
+from apps.transactions.models import Transaction, Category
+from apps.goals.models import Goal
+from apps.budgets.models import Budget
+
+class UserFactory(DjangoModelFactory):
+    class Meta:
+        model = User
+    
+    email = Faker('email')
+    first_name = Faker('first_name')
+    last_name = Faker('last_name')
+
+class AccountFactory(DjangoModelFactory):
+    class Meta:
+        model = Account
+    
+    user = SubFactory(UserFactory)
+    institution_name = Faker('company')
+    account_type = 'checking'
+    account_number_masked = '****1234'
+    balance = Faker('pydecimal', left_digits=5, right_digits=2, positive=True)
+    is_active = True
+
+class CategoryFactory(DjangoModelFactory):
+    class Meta:
+        model = Category
+    
+    name = Faker('word')
+    type = 'expense'
+    is_system_category = True
+
+class TransactionFactory(DjangoModelFactory):
+    class Meta:
+        model = Transaction
+    
+    account = SubFactory(AccountFactory)
+    user = SubFactory(UserFactory)
+    amount = Faker('pydecimal', left_digits=3, right_digits=2, positive=False)
+    date = Faker('date_this_month')
+    merchant_name = Faker('company')
+    description = Faker('sentence', nb_words=6)
+    category = SubFactory(CategoryFactory)
+
+class GoalFactory(DjangoModelFactory):
+    class Meta:
+        model = Goal
+    
+    user = SubFactory(UserFactory)
+    name = Faker('sentence', nb_words=3)
+    target_amount = Faker('pydecimal', left_digits=4, right_digits=2, positive=True)
+    current_amount = Faker('pydecimal', left_digits=3, right_digits=2, positive=True)
+    goal_type = 'emergency_fund'
+    is_active = True
+
+class TransactionModelTest(TestCase):
+    def setUp(self):
+        self.user = UserFactory()
+        self.account = AccountFactory(user=self.user)
+        self.category = CategoryFactory()
+        self.transaction = TransactionFactory(user=self.user, account=self.account, category=self.category)
+    
+    def test_transaction_creation(self):
+        """Test transaction creation with valid data."""
+        transaction = Transaction.objects.create(
+            account=self.account,
+            user=self.user,
+            amount=-50.00,
+            date='2023-12-25',
+            merchant_name='Test Merchant',
+            description='Test transaction',
+            category=self.category
+        )
+        
+        self.assertEqual(transaction.amount, -50.00)
+        self.assertEqual(transaction.merchant_name, 'Test Merchant')
+        self.assertEqual(transaction.user, self.user)
+        self.assertEqual(transaction.account, self.account)
+    
+    def test_transaction_str_representation(self):
+        """Test string representation of transaction."""
+        expected = f"{self.transaction.merchant_name} - {self.transaction.amount}"
+        self.assertEqual(str(self.transaction), expected)
+    
+    def test_transaction_ordering(self):
+        """Test transactions are ordered by date (most recent first)."""
+        transaction1 = TransactionFactory(user=self.user, account=self.account, date='2023-12-01')
+        transaction2 = TransactionFactory(user=self.user, account=self.account, date='2023-12-25')
+        
+        transactions = Transaction.objects.all()
+        self.assertEqual(transactions[0], transaction2)  # Most recent first
+        self.assertEqual(transactions[1], transaction1)
+    
+    def test_transaction_user_relationship(self):
+        """Test user-transaction relationship."""
+        self.assertEqual(self.transaction.user, self.user)
+        self.assertIn(self.transaction, self.user.transactions.all())
+    
+    def test_transaction_validation(self):
+        """Test transaction validation rules."""
+        # Test amount validation
+        with self.assertRaises(ValidationError):
+            transaction = Transaction(
+                account=self.account,
+                user=self.user,
+                amount=0,  # Zero amount
+                date='2023-12-25',
+                merchant_name='Test Merchant'
+            )
+            transaction.full_clean()
+    
+    def test_transaction_manager_methods(self):
+        """Test custom manager methods."""
+        expense = TransactionFactory(
+            user=self.user,
+            account=self.account,
+            amount=-100.00
+        )
+        income = TransactionFactory(
+            user=self.user,
+            account=self.account,
+            amount=1000.00
+        )
+        
+        # Test for_user method
+        user_transactions = Transaction.objects.for_user(self.user)
+        self.assertEqual(user_transactions.count(), 2)
+        
+        # Test expenses method
+        expenses = Transaction.objects.expenses()
+        self.assertEqual(expenses.count(), 1)
+        self.assertIn(expense, expenses)
+```
+
+### Serializer Testing
+Comprehensive serializer testing:
+
+```python
+# ✅ Good serializer testing
+from rest_framework.test import APITestCase
+from rest_framework import status
+from django.contrib.auth.models import User
+
+from apps.transactions.serializers import TransactionCreateSerializer, TransactionListSerializer
+from apps.transactions.models import Transaction
+from apps.accounts.models import Account
+from apps.goals.serializers import GoalCreateSerializer, GoalSerializer
+
+class TransactionSerializerTest(APITestCase):
+    def setUp(self):
+        self.user = UserFactory()
+        self.account = AccountFactory(user=self.user)
+        self.category = CategoryFactory()
+        self.transaction_data = {
+            'account': self.account.id,
+            'amount': -50.00,
+            'date': '2023-12-25',
+            'merchant_name': 'Test Merchant',
+            'description': 'Test transaction',
+            'category': self.category.id
+        }
+    
+    def test_transaction_create_serializer_valid_data(self):
+        """Test transaction creation with valid data."""
+        serializer = TransactionCreateSerializer(data=self.transaction_data)
+        self.assertTrue(serializer.is_valid())
+        
+        transaction = serializer.save(user=self.user)
+        self.assertEqual(transaction.amount, self.transaction_data['amount'])
+        self.assertEqual(transaction.merchant_name, self.transaction_data['merchant_name'])
+        self.assertEqual(transaction.user, self.user)
+    
+    def test_transaction_create_serializer_invalid_amount(self):
+        """Test transaction creation with invalid amount."""
+        invalid_data = {
+            **self.transaction_data,
+            'amount': 0  # Zero amount
+        }
+        
+        serializer = TransactionCreateSerializer(data=invalid_data)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('amount', serializer.errors)
+    
+    def test_transaction_create_serializer_missing_fields(self):
+        """Test transaction creation with missing required fields."""
+        invalid_data = {
+            'amount': -50.00
+            # Missing merchant_name, date, etc.
+        }
+        
+        serializer = TransactionCreateSerializer(data=invalid_data)
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('merchant_name', serializer.errors)
+    
+    def test_transaction_list_serializer(self):
+        """Test transaction list serializer."""
+        transaction = TransactionFactory(user=self.user, account=self.account)
+        serializer = TransactionListSerializer(transaction)
+        
+        data = serializer.data
+        self.assertEqual(data['merchant_name'], transaction.merchant_name)
+        self.assertEqual(data['amount'], str(transaction.amount))
+        self.assertIn('date', data)
+        self.assertIn('category', data)
+```
+
+### View Testing
+Comprehensive view testing:
+
+```python
+# ✅ Good view testing
+from rest_framework.test import APITestCase
+from rest_framework import status
+from django.urls import reverse
+from django.contrib.auth.models import User
+
+from apps.transactions.models import Transaction
+from apps.accounts.models import Account
+from apps.goals.models import Goal
+
+class TransactionViewSetTest(APITestCase):
+    def setUp(self):
+        self.user = UserFactory()
+        self.other_user = UserFactory()
+        self.account = AccountFactory(user=self.user)
+        self.category = CategoryFactory()
+        self.transaction = TransactionFactory(user=self.user, account=self.account, category=self.category)
+        self.url = reverse('api:transaction-list')
+        self.detail_url = reverse('api:transaction-detail', kwargs={'pk': self.transaction.pk})
+    
+    def test_list_transactions_authenticated(self):
+        """Test listing transactions for authenticated user."""
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(self.url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']['transactions']), 1)
+        self.assertEqual(response.data['data']['transactions'][0]['id'], self.transaction.id)
+    
+    def test_list_transactions_unauthenticated(self):
+        """Test listing transactions without authentication."""
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+    
+    def test_create_transaction_authenticated(self):
+        """Test creating transaction for authenticated user."""
+        self.client.force_authenticate(user=self.user)
+        data = {
+            'account': self.account.id,
+            'amount': -75.50,
+            'date': '2023-12-25',
+            'merchant_name': 'New Merchant',
+            'description': 'New transaction',
+            'category': self.category.id
+        }
+        
+        response = self.client.post(self.url, data)
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['status'], 'success')
+        self.assertEqual(response.data['data']['merchant_name'], data['merchant_name'])
+        
+        # Verify transaction was created
+        transaction = Transaction.objects.get(merchant_name=data['merchant_name'])
+        self.assertEqual(transaction.user, self.user)
+    
+    def test_update_transaction_owner(self):
+        """Test updating transaction by owner."""
+        self.client.force_authenticate(user=self.user)
+        data = {'category': self.category.id, 'notes': 'Updated notes'}
+        
+        response = self.client.patch(self.detail_url, data)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Verify transaction was updated
+        self.transaction.refresh_from_db()
+        self.assertEqual(self.transaction.notes, data['notes'])
+    
+    def test_update_transaction_non_owner(self):
+        """Test updating transaction by non-owner."""
+        self.client.force_authenticate(user=self.other_user)
+        data = {'category': self.category.id}
+        
+        response = self.client.patch(self.detail_url, data)
+        
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+    
+    def test_delete_transaction_owner(self):
+        """Test deleting transaction by owner."""
+        self.client.force_authenticate(user=self.user)
+        
+        response = self.client.delete(self.detail_url)
+        
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        
+        # Verify transaction was deleted
+        self.assertFalse(Transaction.objects.filter(pk=self.transaction.pk).exists())
+    
+    def test_filter_transactions_by_category(self):
+        """Test filtering transactions by category."""
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(self.url, {'category': self.category.id})
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['data']['transactions']), 1)
+        self.assertEqual(response.data['data']['transactions'][0]['category']['id'], self.category.id)
+    
+    def test_filter_transactions_by_date_range(self):
+        """Test filtering transactions by date range."""
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(self.url, {
+            'date_from': '2023-12-01',
+            'date_to': '2023-12-31'
+        })
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(response.data['data']['transactions']), 1)
+```
+
+### Celery Task Testing
+Comprehensive Celery task testing:
+
+```python
+# ✅ Good Celery task testing
+from unittest.mock import patch, Mock
+from celery import current_app
+from django.test import TestCase
+
+from apps.accounts.tasks import sync_account_transactions, categorize_transactions
+from apps.transactions.models import Transaction
+from apps.accounts.models import Account
+from apps.goals.tasks import send_goal_milestone_notification
+
+class CeleryTaskTest(TestCase):
+    def setUp(self):
+        self.user = UserFactory()
+        self.account = AccountFactory(user=self.user)
+        self.category = CategoryFactory()
+    
+    @patch('apps.accounts.tasks.plaid_client')
+    def test_sync_account_transactions_success(self, mock_plaid):
+        """Test successful account transaction sync."""
+        # Mock Plaid API response
+        mock_plaid.transactions_get.return_value = {
+            'transactions': [
+                {
+                    'transaction_id': 'test-123',
+                    'amount': -50.00,
+                    'date': '2023-12-25',
+                    'name': 'Test Merchant',
+                    'merchant_name': 'Test Merchant',
+                    'category': ['Food and Drink', 'Restaurants']
+                }
+            ],
+            'total_transactions': 1
+        }
+        
+        # Execute task
+        result = sync_account_transactions(self.account.id)
+        
+        # Verify result
+        self.assertEqual(result, f"Account {self.account.id} synced successfully")
+        
+        # Verify transaction was created
+        transaction = Transaction.objects.get(plaid_transaction_id='test-123')
+        self.assertEqual(transaction.amount, -50.00)
+        self.assertEqual(transaction.merchant_name, 'Test Merchant')
+        self.assertEqual(transaction.account, self.account)
+        
+        # Verify Plaid API was called
+        mock_plaid.transactions_get.assert_called_once()
+    
+    @patch('apps.accounts.tasks.plaid_client')
+    def test_sync_account_transactions_api_failure(self, mock_plaid):
+        """Test account sync with Plaid API failure."""
+        # Mock API failure
+        mock_plaid.transactions_get.side_effect = Exception('Plaid API error')
+        
+        # Execute task
+        with self.assertRaises(Exception):
+            sync_account_transactions(self.account.id)
+        
+        # Verify no transactions were created
+        self.assertEqual(Transaction.objects.filter(account=self.account).count(), 0)
+    
+    @patch('apps.accounts.tasks.categorize_transaction')
+    def test_categorize_transactions_success(self, mock_categorize):
+        """Test automatic transaction categorization."""
+        transaction = TransactionFactory(user=self.user, account=self.account, category=None)
+        mock_categorize.return_value = self.category
+        
+        # Execute task
+        result = categorize_transactions([transaction.id])
+        
+        # Verify result
+        self.assertEqual(result, f"Categorized 1 transactions")
+        
+        # Verify transaction was categorized
+        transaction.refresh_from_db()
+        self.assertEqual(transaction.category, self.category)
+        
+        # Verify categorization was called
+        mock_categorize.assert_called_once()
+    
+    @patch('apps.goals.tasks.send_mail')
+    def test_send_goal_milestone_notification(self, mock_send_mail):
+        """Test goal milestone notification email."""
+        goal = GoalFactory(user=self.user, current_amount=500.00, target_amount=1000.00)
+        
+        # Execute task
+        send_goal_milestone_notification(goal.id, '50_percent')
+        
+        # Verify email was sent
+        mock_send_mail.assert_called_once_with(
+            subject='Goal Milestone Reached!',
+            message=f'Congratulations! You\'ve reached 50% of your goal "{goal.name}".',
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[self.user.email],
+            fail_silently=False,
+        )
+```
+
+## Frontend Testing
+
+### Component Testing
+Comprehensive React component testing:
+
+```jsx
+// ✅ Good component testing
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { BrowserRouter } from 'react-router-dom';
+
+import Dashboard from '../Dashboard';
+import TransactionList from '../TransactionList';
+import { useAuth } from '../../hooks/useAuth';
+import { useTransactions } from '../../hooks/useTransactions';
+import { connectAccount, syncAccount } from '../../utils/api';
+
+// Mock dependencies
+jest.mock('../../hooks/useAuth');
+jest.mock('../../hooks/useTransactions');
+jest.mock('../../utils/api');
+
+const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+const mockUseTransactions = useTransactions as jest.MockedFunction<typeof useTransactions>;
+const mockConnectAccount = connectAccount as jest.MockedFunction<typeof connectAccount>;
+const mockSyncAccount = syncAccount as jest.MockedFunction<typeof syncAccount>;
+
+describe('Dashboard', () => {
+    const mockUser = { id: 1, email: 'test@example.com' };
+    const mockTransactions = [
+        { id: 1, merchant_name: 'Test Merchant', amount: -50.00, date: '2023-12-25' },
+        { id: 2, merchant_name: 'Another Merchant', amount: -25.00, date: '2023-12-24' }
+    ];
+    
+    beforeEach(() => {
+        mockUseAuth.mockReturnValue({
+            user: mockUser,
+            isAuthenticated: true
+        });
+        
+        mockUseTransactions.mockReturnValue({
+            transactions: mockTransactions,
+            isLoading: false,
+            error: null,
+            refetch: jest.fn()
+        });
+    });
+    
+    afterEach(() => {
+        jest.clearAllMocks();
+    });
+    
+    const renderDashboard = () => {
+        return render(
+            <BrowserRouter>
+                <Dashboard />
+            </BrowserRouter>
+        );
+    };
+    
+    it('renders dashboard correctly', () => {
+        renderDashboard();
+        
+        expect(screen.getByText('Dashboard')).toBeInTheDocument();
+        expect(screen.getByText('Recent Transactions')).toBeInTheDocument();
+    });
+    
+    it('displays account balance', () => {
+        renderDashboard();
+        
+        expect(screen.getByText(/\$[\d,]+\.\d{2}/)).toBeInTheDocument();
+    });
+    
+    it('displays recent transactions', () => {
+        renderDashboard();
+        
+        expect(screen.getByText('Test Merchant')).toBeInTheDocument();
+        expect(screen.getByText('Another Merchant')).toBeInTheDocument();
+    });
+    
+    it('handles account connection', async () => {
+        const user = userEvent.setup();
+        mockConnectAccount.mockResolvedValue({
+            id: 1,
+            institution_name: 'Test Bank',
+            account_type: 'checking'
+        });
+        
+        renderDashboard();
+        
+        const connectButton = screen.getByRole('button', { name: /connect account/i });
+        await user.click(connectButton);
+        
+        await waitFor(() => {
+            expect(mockConnectAccount).toHaveBeenCalled();
+        });
+    });
+    
+    it('handles account sync', async () => {
+        const user = userEvent.setup();
+        mockSyncAccount.mockResolvedValue({ success: true });
+        
+        renderDashboard();
+        
+        const syncButton = screen.getByRole('button', { name: /sync/i });
+        await user.click(syncButton);
+        
+        await waitFor(() => {
+            expect(mockSyncAccount).toHaveBeenCalled();
+        });
+    });
+    
+    it('displays loading state', () => {
+        mockUseTransactions.mockReturnValue({
+            transactions: [],
+            isLoading: true,
+            error: null,
+            refetch: jest.fn()
+        });
+        
+        renderDashboard();
+        
+        expect(screen.getByText(/loading/i)).toBeInTheDocument();
+    });
+    
+    it('displays error state', () => {
+        mockUseTransactions.mockReturnValue({
+            transactions: [],
+            isLoading: false,
+            error: new Error('Failed to load transactions'),
+            refetch: jest.fn()
+        });
+        
+        renderDashboard();
+        
+        expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
+    });
+    
+    it('redirects unauthenticated users', () => {
+        mockUseAuth.mockReturnValue({
+            user: null,
+            isAuthenticated: false
+        });
+        
+        renderDashboard();
+        
+        // Should redirect to login (handled by router)
+        expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
+    });
+});
+```
+
+### Hook Testing
+Comprehensive custom hook testing:
+
+```jsx
+// ✅ Good hook testing
+import { renderHook, act } from '@testing-library/react';
+import { useTransactions } from '../useTransactions';
+import { useAccounts } from '../useAccounts';
+
+describe('useTransactions', () => {
+    const mockTransactions = [
+        { id: 1, merchant_name: 'Test Merchant', amount: -50.00 },
+        { id: 2, merchant_name: 'Another Merchant', amount: -25.00 }
+    ];
+    
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+    
+    it('fetches transactions on mount', async () => {
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: { transactions: mockTransactions } })
+        });
+        
+        const { result } = renderHook(() => useTransactions());
+        
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        });
+        
+        expect(result.current.transactions).toEqual(mockTransactions);
+        expect(result.current.isLoading).toBe(false);
+    });
+    
+    it('handles transaction filtering', async () => {
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: { transactions: [mockTransactions[0]] } })
+        });
+        
+        const { result } = renderHook(() => useTransactions({ category: 1 }));
+        
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        });
+        
+        expect(result.current.transactions).toHaveLength(1);
+    });
+    
+    it('handles transaction creation', async () => {
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: { transaction: mockTransactions[0] } })
+        });
+        
+        const { result } = renderHook(() => useTransactions());
+        
+        await act(async () => {
+            await result.current.createTransaction({
+                amount: -50.00,
+                merchant_name: 'Test Merchant'
+            });
+        });
+        
+        expect(result.current.transactions).toContainEqual(mockTransactions[0]);
+    });
+    
+    it('handles errors correctly', async () => {
+        global.fetch = jest.fn().mockRejectedValue(new Error('API Error'));
+        
+        const { result } = renderHook(() => useTransactions());
+        
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        });
+        
+        expect(result.current.error).toBeTruthy();
+        expect(result.current.isLoading).toBe(false);
+    });
+});
+
+describe('useAccounts', () => {
+    const mockAccounts = [
+        { id: 1, institution_name: 'Test Bank', balance: 1000.00 },
+        { id: 2, institution_name: 'Another Bank', balance: 500.00 }
+    ];
+    
+    it('fetches accounts on mount', async () => {
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: { accounts: mockAccounts } })
+        });
+        
+        const { result } = renderHook(() => useAccounts());
+        
+        await act(async () => {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        });
+        
+        expect(result.current.accounts).toEqual(mockAccounts);
+    });
+    
+    it('handles account connection', async () => {
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ data: { account: mockAccounts[0] } })
+        });
+        
+        const { result } = renderHook(() => useAccounts());
+        
+        await act(async () => {
+            await result.current.connectAccount({ institution_id: 'test-bank' });
+        });
+        
+        expect(result.current.accounts).toContainEqual(mockAccounts[0]);
+    });
+});
+```
+
+### Utility Testing
+Comprehensive utility function testing:
+
+```jsx
+// ✅ Good utility testing
+import { formatCurrency, formatDate, calculateSpendingByCategory, validateAccountNumber } from '../utils';
+
+describe('formatCurrency', () => {
+    it('formats positive amounts correctly', () => {
+        const formatted = formatCurrency(1000.50);
+        expect(formatted).toBe('$1,000.50');
+    });
+    
+    it('formats negative amounts correctly', () => {
+        const formatted = formatCurrency(-50.25);
+        expect(formatted).toBe('-$50.25');
+    });
+    
+    it('handles zero amounts', () => {
+        const formatted = formatCurrency(0);
+        expect(formatted).toBe('$0.00');
+    });
+    
+    it('handles large amounts', () => {
+        const formatted = formatCurrency(1000000.99);
+        expect(formatted).toBe('$1,000,000.99');
+    });
+});
+
+describe('formatDate', () => {
+    it('formats date correctly', () => {
+        const date = new Date('2023-12-25T10:30:00Z');
+        const formatted = formatDate(date);
+        
+        expect(formatted).toBe('December 25, 2023');
+    });
+    
+    it('handles invalid date', () => {
+        const invalidDate = new Date('invalid');
+        const formatted = formatDate(invalidDate);
+        
+        expect(formatted).toBe('Invalid Date');
+    });
+});
+
+describe('calculateSpendingByCategory', () => {
+    it('calculates spending by category correctly', () => {
+        const transactions = [
+            { category: { id: 1, name: 'Groceries' }, amount: -100.00 },
+            { category: { id: 1, name: 'Groceries' }, amount: -50.00 },
+            { category: { id: 2, name: 'Dining' }, amount: -75.00 }
+        ];
+        
+        const result = calculateSpendingByCategory(transactions);
+        
+        expect(result).toEqual({
+            'Groceries': -150.00,
+            'Dining': -75.00
+        });
+    });
+    
+    it('handles empty transactions', () => {
+        const result = calculateSpendingByCategory([]);
+        expect(result).toEqual({});
+    });
+    
+    it('handles transactions without categories', () => {
+        const transactions = [
+            { category: null, amount: -100.00 },
+            { category: { id: 1, name: 'Groceries' }, amount: -50.00 }
+        ];
+        
+        const result = calculateSpendingByCategory(transactions);
+        
+        expect(result).toEqual({
+            'Uncategorized': -100.00,
+            'Groceries': -50.00
+        });
+    });
+});
+
+describe('validateAccountNumber', () => {
+    it('validates valid account number', () => {
+        const result = validateAccountNumber('1234567890');
+        expect(result.valid).toBe(true);
+        expect(result.error).toBe(null);
+    });
+    
+    it('rejects account number that is too short', () => {
+        const result = validateAccountNumber('123');
+        expect(result.valid).toBe(false);
+        expect(result.error).toContain('Account number must be at least 8 digits');
+    });
+    
+    it('rejects account number with non-numeric characters', () => {
+        const result = validateAccountNumber('12345abc');
+        expect(result.valid).toBe(false);
+        expect(result.error).toContain('Account number must contain only digits');
+    });
+    
+    it('handles null account number', () => {
+        const result = validateAccountNumber(null);
+        expect(result.valid).toBe(false);
+        expect(result.error).toContain('Account number is required');
+    });
+});
+```
+
+## Integration Testing
+
+### End-to-End Testing
+Comprehensive E2E testing:
+
+```javascript
+// ✅ Good E2E testing with Playwright
+import { test, expect } from '@playwright/test';
+
+test.describe('Account Connection and Transaction Flow', () => {
+    test('complete account connection to transaction viewing flow', async ({ page }) => {
+        // Navigate to dashboard
+        await page.goto('/dashboard');
+        
+        // Check if redirected to login (unauthenticated)
+        await expect(page).toHaveURL('/login');
+        
+        // Login
+        await page.fill('[data-testid="email-input"]', 'test@example.com');
+        await page.fill('[data-testid="password-input"]', 'password123');
+        await page.click('[data-testid="login-button"]');
+        
+        // Should redirect to dashboard
+        await expect(page).toHaveURL('/dashboard');
+        
+        // Connect bank account
+        await page.click('[data-testid="connect-account-button"]');
+        
+        // Select bank from Plaid Link
+        await page.click('[data-testid="bank-select"]');
+        await page.fill('[data-testid="bank-search"]', 'Test Bank');
+        await page.click('[data-testid="bank-option-Test Bank"]');
+        
+        // Enter credentials (mocked for testing)
+        await page.fill('[data-testid="plaid-username"]', 'test_user');
+        await page.fill('[data-testid="plaid-password"]', 'test_password');
+        await page.click('[data-testid="plaid-submit"]');
+        
+        // Wait for account connection
+        await expect(page.locator('[data-testid="account-connected"]')).toBeVisible({ timeout: 10000 });
+        
+        // Verify account appears on dashboard
+        await expect(page.locator('[data-testid="account-balance"]')).toBeVisible();
+        
+        // Wait for transactions to sync
+        await page.waitForSelector('[data-testid="transaction-list"]', { timeout: 10000 });
+        
+        // Verify transactions are displayed
+        await expect(page.locator('[data-testid="transaction-item"]').first()).toBeVisible();
+        
+        // Test transaction categorization
+        await page.click('[data-testid="transaction-item"]').first();
+        await page.click('[data-testid="edit-category-button"]');
+        await page.selectOption('[data-testid="category-select"]', 'groceries');
+        await page.click('[data-testid="save-category-button"]');
+        
+        // Verify category was updated
+        await expect(page.locator('[data-testid="transaction-category"]')).toContainText('Groceries');
+    });
+    
+    test('creates and tracks savings goal', async ({ page }) => {
+        await page.goto('/dashboard');
+        
+        // Login (skip if already logged in from previous test)
+        if (await page.locator('[data-testid="email-input"]').isVisible()) {
+            await page.fill('[data-testid="email-input"]', 'test@example.com');
+            await page.fill('[data-testid="password-input"]', 'password123');
+            await page.click('[data-testid="login-button"]');
+        }
+        
+        // Navigate to goals page
+        await page.click('[data-testid="goals-nav-link"]');
+        await expect(page).toHaveURL('/goals');
+        
+        // Create new goal
+        await page.click('[data-testid="create-goal-button"]');
+        await page.fill('[data-testid="goal-name-input"]', 'Emergency Fund');
+        await page.fill('[data-testid="goal-amount-input"]', '10000');
+        await page.fill('[data-testid="goal-deadline-input"]', '2024-12-31');
+        await page.click('[data-testid="save-goal-button"]');
+        
+        // Verify goal was created
+        await expect(page.locator('[data-testid="goal-item"]')).toContainText('Emergency Fund');
+        await expect(page.locator('[data-testid="goal-progress"]')).toContainText('0%');
+        
+        // Add contribution to goal
+        await page.click('[data-testid="goal-item"]');
+        await page.fill('[data-testid="contribution-amount-input"]', '500');
+        await page.click('[data-testid="add-contribution-button"]');
+        
+        // Verify progress updated
+        await expect(page.locator('[data-testid="goal-progress"]')).toContainText('5%');
+    });
+    
+    test('views spending analytics', async ({ page }) => {
+        await page.goto('/dashboard');
+        
+        // Login if needed
+        if (await page.locator('[data-testid="email-input"]').isVisible()) {
+            await page.fill('[data-testid="email-input"]', 'test@example.com');
+            await page.fill('[data-testid="password-input"]', 'password123');
+            await page.click('[data-testid="login-button"]');
+        }
+        
+        // Navigate to analytics page
+        await page.click('[data-testid="analytics-nav-link"]');
+        await expect(page).toHaveURL('/analytics');
+        
+        // Verify spending chart is displayed
+        await expect(page.locator('[data-testid="spending-chart"]')).toBeVisible();
+        
+        // Verify category breakdown is displayed
+        await expect(page.locator('[data-testid="category-breakdown"]')).toBeVisible();
+        
+        // Change time period
+        await page.selectOption('[data-testid="time-period-select"]', 'year');
+        
+        // Verify chart updates
+        await expect(page.locator('[data-testid="spending-chart"]')).toBeVisible();
+    });
+    
+    test('handles account connection errors gracefully', async ({ page }) => {
+        await page.goto('/dashboard');
+        
+        // Login if needed
+        if (await page.locator('[data-testid="email-input"]').isVisible()) {
+            await page.fill('[data-testid="email-input"]', 'test@example.com');
+            await page.fill('[data-testid="password-input"]', 'password123');
+            await page.click('[data-testid="login-button"]');
+        }
+        
+        // Attempt to connect account with invalid credentials
+        await page.click('[data-testid="connect-account-button"]');
+        await page.fill('[data-testid="plaid-username"]', 'invalid_user');
+        await page.fill('[data-testid="plaid-password"]', 'invalid_password');
+        await page.click('[data-testid="plaid-submit"]');
+        
+        // Should show error message
+        await expect(page.locator('[data-testid="error-message"]')).toContainText('Invalid credentials');
+    });
+});
+```
+
+## Test Data Management
+
+### Factory Usage
+Use factories for consistent test data:
+
+```python
+# ✅ Good factory usage
+import factory
+from factory.django import DjangoModelFactory
+
+class UserFactory(DjangoModelFactory):
+    class Meta:
+        model = User
+    
+    email = factory.Sequence(lambda n: f'user{n}@example.com')
+    first_name = factory.Faker('first_name')
+    last_name = factory.Faker('last_name')
+    is_active = True
+
+class AccountFactory(DjangoModelFactory):
+    class Meta:
+        model = Account
+    
+    user = factory.SubFactory(UserFactory)
+    institution_name = factory.Faker('company')
+    account_type = 'checking'
+    account_number_masked = '****1234'
+    balance = factory.Faker('pydecimal', left_digits=5, right_digits=2, positive=True)
+    is_active = True
+
+class TransactionFactory(DjangoModelFactory):
+    class Meta:
+        model = Transaction
+    
+    account = factory.SubFactory(AccountFactory)
+    user = factory.SubFactory(UserFactory)
+    amount = factory.Faker('pydecimal', left_digits=3, right_digits=2, positive=False)
+    date = factory.Faker('date_this_month')
+    merchant_name = factory.Faker('company')
+    description = factory.Faker('sentence', nb_words=6)
+    category = factory.SubFactory(CategoryFactory)
+
+class GoalFactory(DjangoModelFactory):
+    class Meta:
+        model = Goal
+    
+    user = factory.SubFactory(UserFactory)
+    name = factory.Faker('sentence', nb_words=3)
+    target_amount = factory.Faker('pydecimal', left_digits=4, right_digits=2, positive=True)
+    current_amount = factory.Faker('pydecimal', left_digits=3, right_digits=2, positive=True)
+    goal_type = 'emergency_fund'
+    is_active = True
+
+# Usage in tests
+def test_transaction_creation():
+    user = UserFactory()
+    account = AccountFactory(user=user)
+    transaction = TransactionFactory(user=user, account=account)
+    
+    assert transaction.user == user
+    assert transaction.account == account
+    assert transaction.amount < 0  # Expense transaction
+
+def test_goal_creation():
+    user = UserFactory()
+    goal = GoalFactory(user=user)
+    
+    assert goal.user == user
+    assert goal.is_active == True
+    assert goal.current_amount < goal.target_amount
+```
+
+## Rationale
+
+Test coverage guidelines ensure:
+- **Quality assurance** - Bugs are caught before production
+- **Regression prevention** - Changes don't break existing functionality
+- **Documentation** - Tests serve as living documentation
+- **Confidence** - Developers can refactor safely
+- **Maintainability** - Well-tested code is easier to maintain
+- **User experience** - Fewer bugs mean better user experience

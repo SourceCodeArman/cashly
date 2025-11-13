@@ -1,0 +1,236 @@
+---
+description: Enforce consistent naming conventions across backend and frontend code
+alwaysApply: false
+---
+# Naming Conventions
+
+This rule enforces consistent naming conventions to improve code readability and maintainability across the Cashly platform.
+
+## Backend (Python Django REST)
+
+### Variables and Functions
+- Use `snake_case` for variables, functions, and methods
+- Use descriptive names that clearly indicate purpose
+
+```python
+# ✅ Good examples
+def sync_account_transactions(account_id, user_id):
+    plaid_token = request.data.get('plaid_access_token')
+    sync_status = 'pending'
+    
+def normalize_transaction_data(transaction_data):
+    amount = transaction_data.get('amount')
+    return normalized_data
+
+# ❌ Bad examples
+def syncAccountTransactions(accountId, userId):
+    plaidToken = request.data.get('plaid_access_token')
+    syncStatus = 'pending'
+    
+def normalizeTransactionData(transactionData):
+    amount = transactionData.get('amount')
+    return normalizedData
+```
+
+### Classes and Models
+- Use `PascalCase` for classes, models, and exceptions
+- DRF serializers should end with `Serializer`
+- Views should end with `View` or `ViewSet`
+
+```python
+# ✅ Good examples
+class Transaction(models.Model):
+    merchant_name = models.CharField(max_length=200)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+class TransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Transaction
+        fields = '__all__'
+
+class TransactionViewSet(viewsets.ModelViewSet):
+    queryset = Transaction.objects.all()
+    serializer_class = TransactionSerializer
+
+class ProcessingTaskError(Exception):
+    pass
+
+# ❌ Bad examples
+class summary(models.Model):
+    title = models.CharField(max_length=200)
+
+class summarySerializer(serializers.ModelSerializer):
+    pass
+
+class summary_view(viewsets.ModelViewSet):
+    pass
+```
+
+### Constants
+- Use `UPPER_SNAKE_CASE` for constants and configuration values
+
+```python
+# ✅ Good examples
+MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
+ALLOWED_MIME_TYPES = ['audio/mpeg', 'video/mp4']
+DEFAULT_RETENTION_DAYS = 30
+
+# ❌ Bad examples
+maxFileSize = 100 * 1024 * 1024
+allowedMimeTypes = ['audio/mpeg', 'video/mp4']
+defaultRetentionDays = 30
+```
+
+### File Names
+- Use `snake_case.py` for Python files
+- Use descriptive names that indicate the file's purpose
+
+```python
+# ✅ Good examples
+# File: backend/apps/api/models.py
+# File: backend/apps/api/serializers.py
+# File: backend/apps/api/views.py
+# File: backend/apps/api/tasks.py
+
+# ❌ Bad examples
+# File: backend/apps/api/Models.py
+# File: backend/apps/api/serializers.py
+# File: backend/apps/api/Views.py
+```
+
+## Frontend (React/JavaScript)
+
+### Variables and Functions
+- Use `camelCase` for variables, functions, and methods
+- Use descriptive names that clearly indicate purpose
+
+```javascript
+// ✅ Good examples
+const uploadProgress = 0.5;
+const summaryData = await fetchSummary(id);
+const isProcessingComplete = status === 'completed';
+
+function handleFileUpload(event) {
+    const selectedFile = event.target.files[0];
+    return processFile(selectedFile);
+}
+
+// ❌ Bad examples
+const upload_progress = 0.5;
+const summary_data = await fetchSummary(id);
+const is_processing_complete = status === 'completed';
+
+function handle_file_upload(event) {
+    const selected_file = event.target.files[0];
+    return process_file(selected_file);
+}
+```
+
+### React Components
+- Use `PascalCase` for React components
+- Use descriptive names that indicate the component's purpose
+
+```jsx
+// ✅ Good examples
+function UploadPage() {
+    return <div>Upload Page</div>;
+}
+
+function SummaryResult({ summary }) {
+    return <div>{summary.title}</div>;
+}
+
+function useSummaryWebSocket(summaryId) {
+    // Hook logic
+}
+
+// ❌ Bad examples
+function uploadPage() {
+    return <div>Upload Page</div>;
+}
+
+function summary_result({ summary }) {
+    return <div>{summary.title}</div>;
+}
+
+function use_summary_websocket(summaryId) {
+    // Hook logic
+}
+```
+
+### Constants
+- Use `UPPER_SNAKE_CASE` for constants
+
+```javascript
+// ✅ Good examples
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
+const API_BASE_URL = 'https://api.cashly.com';
+const DEFAULT_TIMEOUT = 5000;
+
+// ❌ Bad examples
+const maxFileSize = 100 * 1024 * 1024;
+const apiBaseUrl = 'https://api.cashly.com';
+const defaultTimeout = 5000;
+```
+
+### File Names
+- Use `PascalCase.jsx` for React components
+- Use `camelCase.js` for utilities and hooks
+
+```javascript
+// ✅ Good examples
+// File: frontend/src/components/UploadPage.jsx
+// File: frontend/src/components/SummaryResult.jsx
+// File: frontend/src/hooks/useSummaryWebSocket.js
+// File: frontend/src/utils/summaryParser.js
+
+// ❌ Bad examples
+// File: frontend/src/components/uploadPage.jsx
+// File: frontend/src/components/summary_result.jsx
+// File: frontend/src/hooks/use_summary_websocket.js
+```
+
+## Special Cases
+
+### Django Apps
+- Use lowercase, descriptive names for Django apps
+- Avoid abbreviations unless they're widely understood
+
+```python
+# ✅ Good examples
+# apps/accounts/
+# apps/api/
+# apps/subscriptions/
+# apps/billing/
+
+# ❌ Bad examples
+# apps/acc/
+# apps/api_v1/
+# apps/subs/
+# apps/bill/
+```
+
+### API Endpoints
+- Use lowercase, plural nouns for REST endpoints
+- Use hyphens for multi-word resources
+
+```python
+# ✅ Good examples
+# /api/v1/summaries/
+# /api/v1/usage-counters/
+# /api/v1/subscription-tiers/
+
+# ❌ Bad examples
+# /api/v1/Summary/
+# /api/v1/usageCounters/
+# /api/v1/subscription_tiers/
+```
+
+## Rationale
+
+Consistent naming conventions:
+- **Improve readability** - Developers can quickly understand code structure
+- **Reduce cognitive load** - Predictable patterns make code easier to scan
+- **Enable better tooling** - IDEs can provide better autocomplete and refactoring
+- **Facilitate team collaboration** - New team members can quickly understand the codebase
+- **Support maintainability** - Consistent patterns make refactoring safer and easier

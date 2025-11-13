@@ -1,0 +1,677 @@
+---
+description: Security best practices and guidelines for the Cashly platform
+alwaysApply: false
+---
+# Security Practices
+
+This rule enforces security best practices and guidelines across the entire Cashly platform to protect user data and prevent security vulnerabilities.
+
+## Environment Variables and Secrets
+
+### Secret Management
+Never commit secrets to version control:
+
+```python
+# ✅ Good secret management in settings/base.py
+import os
+from pathlib import Path
+
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+
+# Security settings
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError('SECRET_KEY environment variable is required')
+
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
+
+# Database credentials
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('DB_NAME'),
+        'USER': os.environ.get('DB_USER'),
+        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
+    }
+}
+
+# Cloudflare R2 credentials
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+
+# ❌ Bad - hardcoded secrets
+SECRET_KEY = 'django-insecure-hardcoded-secret-key'
+DEBUG = True
+ALLOWED_HOSTS = ['*']
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'cashly',
+        'USER': 'postgres',
+        'PASSWORD': 'password123',
+        'HOST': 'localhost',
+        'PORT': '5432',
+    }
+}
+```
+
+### Environment File Structure
+Use proper environment file organization:
+
+```bash
+# ✅ Good .env file structure
+# .env (never commit this file)
+SECRET_KEY=your-secret-key-here
+DEBUG=False
+ALLOWED_HOSTS=localhost,127.0.0.1,yourdomain.com
+
+# Database
+DB_NAME=cashly_prod
+DB_USER=cashly_user
+DB_PASSWORD=secure-password-here
+DB_HOST=your-db-host
+DB_PORT=5432
+
+# Cloudflare R2 / S3
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_STORAGE_BUCKET_NAME=cashly-storage
+
+# Celery
+CELERY_BROKER_URL=redis://localhost:6379
+CELERY_RESULT_BACKEND=redis://localhost:6379
+
+# ✅ Good .env.example file (commit this)
+SECRET_KEY=your-secret-key-here
+DEBUG=False
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# Database
+DB_NAME=cashly_dev
+DB_USER=cashly_user
+DB_PASSWORD=your-password
+DB_HOST=localhost
+DB_PORT=5432
+
+# Cloudflare R2 / S3
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_STORAGE_BUCKET_NAME=cashly-storage
+
+# Celery
+CELERY_BROKER_URL=redis://localhost:6379
+CELERY_RESULT_BACKEND=redis://localhost:6379
+```
+
+## Input Validation and Sanitization
+
+### Financial Data Security
+Implement secure handling of financial data and sensitive information:
+
+```python
+# ✅ Good financial data validation
+from django.core.exceptions import ValidationError
+from decimal import Decimal, InvalidOperation
+
+def validate_transaction_amount(amount):
+    """Validate transaction amount for security and correctness."""
+    
+    # Check amount is not zero
+    if amount == 0:
+        raise ValidationError('Transaction amount cannot be zero')
+    
+    # Check amount is within reasonable bounds
+    max_amount = Decimal('999999.99')
+    min_amount = Decimal('-999999.99')
+    
+    try:
+        amount_decimal = Decimal(str(amount))
+        if amount_decimal > max_amount or amount_decimal < min_amount:
+            raise ValidationError('Transaction amount exceeds allowed limits')
+    except (InvalidOperation, ValueError):
+        raise ValidationError('Invalid transaction amount format')
+    
+    return amount_decimal
+
+def sanitize_account_number(account_number):
+    """Sanitize and mask account numbers for display."""
+    if not account_number or len(account_number) < 4:
+        return '****'
+    
+    # Only show last 4 digits
+    return f"****{account_number[-4:]}"
+
+def validate_plaid_token(token):
+    """Validate Plaid access token format and security."""
+    if not token or len(token) < 20:
+        raise ValidationError('Invalid Plaid token format')
+    
+    # Additional validation can be added here
+    return token
+
+# ✅ Good account connection view
+class SecureAccountConnectionView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        plaid_token = request.data.get('plaid_token')
+        institution_id = request.data.get('institution_id')
+        
+        if not plaid_token or not institution_id:
+            return Response({
+                'status': 'error',
+                'message': 'Plaid token and institution ID required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Validate token
+            validate_plaid_token(plaid_token)
+            
+            # Create account record with encrypted token
+            account = Account.objects.create(
+                user=request.user,
+                institution_name=institution_id,
+                plaid_access_token=encrypt_token(plaid_token),  # Encrypt before storing
+                is_active=True
+            )
+            
+            return Response({
+                'status': 'success',
+                'data': {'id': account.id},
+                'message': 'Account connected successfully'
+            })
+            
+        except ValidationError as e:
+            return Response({
+                'status': 'error',
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+```
+
+### Input Sanitization
+Sanitize all user inputs:
+
+```python
+# ✅ Good input sanitization
+from django.utils.html import escape
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
+
+def sanitize_user_input(data):
+    """Sanitize user input data."""
+    sanitized = {}
+    
+    for key, value in data.items():
+        if isinstance(value, str):
+            # Escape HTML characters
+            sanitized[key] = escape(value.strip())
+        else:
+            sanitized[key] = value
+    
+    return sanitized
+
+def validate_email_address(email):
+    """Validate email address format."""
+    try:
+        validate_email(email)
+        return True
+    except ValidationError:
+        return False
+
+# ✅ Good form validation
+class UserRegistrationSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(min_length=8, write_only=True)
+    
+    def validate_email(self, value):
+        if not validate_email_address(value):
+            raise serializers.ValidationError('Invalid email format')
+        
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError('Email already exists')
+        
+        return value.lower().strip()
+    
+    def validate_password(self, value):
+        if len(value) < 8:
+            raise serializers.ValidationError('Password must be at least 8 characters')
+        
+        # Check for common passwords
+        common_passwords = ['password', '123456', 'qwerty', 'admin']
+        if value.lower() in common_passwords:
+            raise serializers.ValidationError('Password is too common')
+        
+        return value
+```
+
+## Authentication and Authorization
+
+### JWT Security
+Implement secure JWT authentication:
+
+```python
+# ✅ Good JWT configuration
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+    'JWK_URL': None,
+    'LEEWAY': 0,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'JTI_CLAIM': 'jti',
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
+}
+
+# ✅ Good JWT refresh handling
+class TokenRefreshView(APIView):
+    def post(self, request):
+        refresh_token = request.data.get('refresh')
+        
+        if not refresh_token:
+            return Response({
+                'status': 'error',
+                'message': 'Refresh token required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Validate refresh token
+            token = RefreshToken(refresh_token)
+            
+            # Generate new access token
+            new_access_token = str(token.access_token)
+            
+            return Response({
+                'status': 'success',
+                'data': {
+                    'access': new_access_token,
+                    'refresh': str(token)
+                },
+                'message': 'Token refreshed successfully'
+            })
+            
+        except TokenError:
+            return Response({
+                'status': 'error',
+                'message': 'Invalid refresh token'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+```
+
+### Permission Classes
+Implement secure permission classes:
+
+```python
+# ✅ Good permission classes
+from rest_framework.permissions import BasePermission
+
+class IsOwnerOrReadOnly(BasePermission):
+    """Only allow owners to edit their objects."""
+    
+    def has_object_permission(self, request, view, obj):
+        # Read permissions for any request
+        if request.method in ['GET', 'HEAD', 'OPTIONS']:
+            return True
+        
+        # Write permissions only to the owner
+        return obj.user == request.user
+
+class IsGuestOrAuthenticated(BasePermission):
+    """Allow authenticated users or guests with valid session."""
+    
+    def has_permission(self, request, view):
+        if request.user.is_authenticated:
+            return True
+        
+        # Check for valid guest session
+        guest_session_id = request.data.get('guest_session_id')
+        if not guest_session_id:
+            return False
+        
+        # Validate guest session exists and is not expired
+        try:
+            guest_session = GuestSession.objects.get(
+                session_id=guest_session_id,
+                expires_at__gt=timezone.now()
+            )
+            return True
+        except GuestSession.DoesNotExist:
+            return False
+
+class RateLimitPermission(BasePermission):
+    """Rate limiting permission."""
+    
+    def has_permission(self, request, view):
+        # Implement rate limiting logic
+        user_id = request.user.id if request.user.is_authenticated else request.META.get('REMOTE_ADDR')
+        
+        # Check rate limit (e.g., 100 requests per hour)
+        if self.is_rate_limited(user_id):
+            return False
+        
+        return True
+    
+    def is_rate_limited(self, user_id):
+        # Implement rate limiting logic using Redis
+        # This is a simplified example
+        return False
+```
+
+## HTTPS and CORS Configuration
+
+### HTTPS Configuration
+Ensure HTTPS is used in production:
+
+```python
+# ✅ Good HTTPS configuration
+SECURE_SSL_REDIRECT = True
+SECURE_HSTS_SECONDS = 31536000  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+
+# Session security
+SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Strict'
+CSRF_COOKIE_SECURE = True
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Strict'
+
+# ❌ Bad - insecure configuration
+SECURE_SSL_REDIRECT = False
+SECURE_HSTS_SECONDS = 0
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+```
+
+### CORS Configuration
+Configure CORS properly:
+
+```python
+# ✅ Good CORS configuration
+CORS_ALLOWED_ORIGINS = [
+    "https://cashly.com",
+    "https://www.cashly.com",
+    "https://app.cashly.com",
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+# ❌ Bad - overly permissive CORS
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+```
+
+## Database Security
+
+### Query Security
+Use secure database queries:
+
+```python
+# ✅ Good secure queries
+from django.db import models
+from django.contrib.auth.models import User
+
+class Transaction(models.Model):
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    merchant_name = models.CharField(max_length=200)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    account = models.ForeignKey(Account, on_delete=models.CASCADE)
+    is_public = models.BooleanField(default=False)
+    
+    class Meta:
+        indexes = [
+            models.Index(fields=['user', 'date']),
+            models.Index(fields=['account', 'date']),
+        ]
+
+# ✅ Good secure view
+class TransactionViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        # Always filter by user to prevent data leakage
+        return Transaction.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        # Always set the user to prevent privilege escalation
+        serializer.save(user=self.request.user)
+    
+    def perform_update(self, serializer):
+        # Ensure user can only update their own transactions
+        if serializer.instance.user != self.request.user:
+            raise PermissionDenied('You can only update your own transactions')
+        serializer.save()
+
+# ❌ Bad - insecure queries
+class BadTransactionViewSet(viewsets.ModelViewSet):
+    def get_queryset(self):
+        # This allows users to see all transactions
+        return Transaction.objects.all()
+    
+    def perform_create(self, serializer):
+        # This allows users to create transactions for other users
+        serializer.save()
+```
+
+## Frontend Security
+
+### XSS Prevention
+Prevent XSS attacks in React components:
+
+```jsx
+// ✅ Good XSS prevention
+import React from 'react';
+import DOMPurify from 'dompurify';
+
+function TransactionNotes({ notes }) {
+    // Sanitize HTML content if notes contain HTML
+    const sanitizedNotes = DOMPurify.sanitize(notes || '');
+    
+    return (
+        <div 
+            className="transaction-notes"
+            dangerouslySetInnerHTML={{ __html: sanitizedNotes }}
+        />
+    );
+}
+
+// ✅ Good input sanitization for financial data
+function TransactionInput({ value, onChange }) {
+    const handleChange = (event) => {
+        const input = event.target.value;
+        
+        // Remove potentially dangerous characters
+        const sanitized = input
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+            .replace(/javascript:/gi, '')
+            .replace(/on\w+\s*=/gi, '');
+        
+        onChange(sanitized);
+    };
+    
+    return (
+        <input
+            type="text"
+            value={value}
+            onChange={handleChange}
+            placeholder="Enter merchant name or description"
+        />
+    );
+}
+
+// ❌ Bad - vulnerable to XSS
+function BadTransactionNotes({ notes }) {
+    return (
+        <div 
+            dangerouslySetInnerHTML={{ __html: notes }}
+        />
+    );
+}
+```
+
+### CSRF Protection
+Implement CSRF protection:
+
+```jsx
+// ✅ Good CSRF protection
+import axios from 'axios';
+
+// Configure axios with CSRF token
+const api = axios.create({
+    baseURL: process.env.REACT_APP_API_URL,
+    withCredentials: true, // Include cookies for CSRF
+});
+
+// Add CSRF token to requests
+api.interceptors.request.use((config) => {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+    if (csrfToken) {
+        config.headers['X-CSRFToken'] = csrfToken;
+    }
+    return config;
+});
+
+// ✅ Good form submission with CSRF
+function SecureForm() {
+    const [data, setData] = useState({});
+    
+    const handleSubmit = async (event) => {
+        event.preventDefault();
+        
+        try {
+            const response = await api.post('/api/v1/transactions/', data);
+            console.log('Success:', response.data);
+        } catch (error) {
+            if (error.response?.status === 403) {
+                console.error('CSRF token missing or invalid');
+            }
+        }
+    };
+    
+    return (
+        <form onSubmit={handleSubmit}>
+            <input
+                type="text"
+                value={data.merchant_name || ''}
+                onChange={(e) => setData({...data, merchant_name: e.target.value})}
+                placeholder="Merchant Name"
+            />
+            <input
+                type="number"
+                value={data.amount || ''}
+                onChange={(e) => setData({...data, amount: e.target.value})}
+                placeholder="Amount"
+            />
+            <button type="submit">Submit</button>
+        </form>
+    );
+}
+```
+
+## Logging and Monitoring
+
+### Security Logging
+Implement comprehensive security logging:
+
+```python
+# ✅ Good security logging
+import logging
+from django.contrib.auth.signals import user_logged_in, user_login_failed
+from django.dispatch import receiver
+
+logger = logging.getLogger('security')
+
+@receiver(user_logged_in)
+def log_user_login(sender, request, user, **kwargs):
+    logger.info(f"User {user.email} logged in from IP {request.META.get('REMOTE_ADDR')}")
+
+@receiver(user_login_failed)
+def log_user_login_failed(sender, credentials, request, **kwargs):
+    logger.warning(f"Failed login attempt for {credentials.get('email')} from IP {request.META.get('REMOTE_ADDR')}")
+
+# ✅ Good security middleware
+class SecurityLoggingMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+    
+    def __call__(self, request):
+        # Log suspicious requests
+        if self.is_suspicious_request(request):
+            logger.warning(f"Suspicious request from {request.META.get('REMOTE_ADDR')}: {request.path}")
+        
+        response = self.get_response(request)
+        return response
+    
+    def is_suspicious_request(self, request):
+        # Check for common attack patterns
+        suspicious_patterns = [
+            '../', '..\\', 'script>', 'javascript:', 'onload=',
+            'union select', 'drop table', 'exec('
+        ]
+        
+        path = request.path.lower()
+        query = str(request.GET).lower()
+        
+        for pattern in suspicious_patterns:
+            if pattern in path or pattern in query:
+                return True
+        
+        return False
+```
+
+## Rationale
+
+Security practices ensure:
+- **Data protection** - User data is secure and private
+- **Attack prevention** - Common vulnerabilities are mitigated
+- **Compliance** - Security standards are met
+- **Trust** - Users can trust the platform with their data
+- **Business continuity** - Security incidents are prevented
+- **Legal protection** - Security measures protect against liability

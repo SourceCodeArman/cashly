@@ -1,0 +1,609 @@
+---
+description: Django-specific development guidelines and best practices
+alwaysApply: false
+---
+# Django Guidelines
+
+## Backend Server Startup
+
+### Docker-Only Server Execution
+The backend must always be started using Docker infrastructure:
+
+✅ Allowed:
+- `docker-compose up`
+- `docker-compose up --build`
+- `docker compose up`
+
+❌ Not allowed:
+- `python manage.py runserver`
+- Any direct Django `runserver` usage
+
+Reason:
+The backend environment depends on Docker-based services such as Postgres, Redis, Celery, and networking. Running Django directly locally will result in inconsistent environments, failed dependencies, and invalid dev setup.
+
+This rule enforces Django-specific development guidelines and best practices for the Cashly platform.
+
+## App Registration and Configuration
+
+### App Structure
+Each Django app must be properly registered and configured:
+
+```python
+# ✅ Good app registration in settings/base.py
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    
+    # Third-party apps
+    'rest_framework',
+    'corsheaders',
+    'channels',
+    
+    # Local apps
+    'apps.accounts',
+    'apps.transactions',
+    'apps.goals',
+    'apps.budgets',
+    'apps.analytics',
+]
+
+# ✅ Good app configuration in apps.py
+from django.apps import AppConfig
+
+class ApiConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.api'
+    verbose_name = 'API'
+    
+    def ready(self):
+        import apps.api.signals
+```
+
+### URL Configuration
+Each app must have its own `urls.py` and be included in the main URL configuration:
+
+```python
+# ✅ Good URL structure in apps/api/urls.py
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from . import views
+
+router = DefaultRouter()
+router.register(r'transactions', views.TransactionViewSet)
+router.register(r'accounts', views.AccountViewSet)
+router.register(r'goals', views.GoalViewSet)
+router.register(r'budgets', views.BudgetViewSet)
+
+app_name = 'api'
+urlpatterns = [
+    path('', include(router.urls)),
+    path('accounts/<int:account_id>/sync/', views.sync_account, name='sync-account'),
+    path('transactions/<int:transaction_id>/categorize/', views.categorize_transaction, name='categorize'),
+]
+
+# ✅ Good main URL configuration in config/urls.py
+from django.contrib import admin
+from django.urls import path, include
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/v1/', include('apps.api.urls')),
+    path('api/v1/auth/', include('apps.accounts.urls')),
+    path('api/v1/billing/', include('apps.subscriptions.urls')),
+]
+```
+
+## Model Guidelines
+
+### Model Definition
+All models must follow consistent patterns:
+
+```python
+# ✅ Good model structure
+from django.db import models
+from django.contrib.auth.models import User
+from django.core.validators import MinLengthValidator, MaxLengthValidator
+
+class Transaction(models.Model):
+    # Fields
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Transaction amount (negative for expenses, positive for income)"
+    )
+    merchant_name = models.CharField(
+        max_length=200,
+        validators=[MinLengthValidator(2), MaxLengthValidator(200)],
+        help_text="Merchant or transaction name (2-200 characters)"
+    )
+    description = models.TextField(blank=True)
+    date = models.DateField()
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='transactions'
+    )
+    account = models.ForeignKey(
+        'accounts.Account',
+        on_delete=models.CASCADE,
+        related_name='transactions'
+    )
+    category = models.ForeignKey(
+        'transactions.Category',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='transactions'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # Meta
+    class Meta:
+        ordering = ['-date', '-created_at']
+        verbose_name = 'Transaction'
+        verbose_name_plural = 'Transactions'
+        indexes = [
+            models.Index(fields=['user', 'date']),
+            models.Index(fields=['account', 'date']),
+            models.Index(fields=['category', 'date']),
+        ]
+    
+    # Methods
+    def __str__(self):
+        return f"{self.merchant_name} - {self.amount}"
+    
+    def is_expense(self):
+        return self.amount < 0
+    
+    def is_income(self):
+        return self.amount > 0
+```
+
+### Model Managers
+Use custom managers for complex queries:
+
+```python
+# ✅ Good manager usage
+class TransactionManager(models.Manager):
+    def for_user(self, user):
+        return self.filter(user=user)
+    
+    def expenses(self):
+        return self.filter(amount__lt=0)
+    
+    def income(self):
+        return self.filter(amount__gt=0)
+    
+    def recent(self, days=30):
+        from django.utils import timezone
+        since = timezone.now() - timezone.timedelta(days=days)
+        return self.filter(date__gte=since)
+    
+    def by_category(self, category):
+        return self.filter(category=category)
+
+class Transaction(models.Model):
+    # ... fields ...
+    
+    objects = TransactionManager()
+    
+    class Meta:
+        # ... meta options ...
+```
+
+## Serializer Guidelines
+
+### DRF Serializers
+Always use `ModelSerializer` when possible and follow consistent patterns:
+
+```python
+# ✅ Good serializer structure
+from rest_framework import serializers
+from django.contrib.auth.models import User
+from .models import Transaction, Category
+
+class TransactionListSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    formatted_amount = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Transaction
+        fields = ['id', 'merchant_name', 'amount', 'formatted_amount', 'date', 'category_name', 'created_at']
+        read_only_fields = ['id', 'created_at']
+    
+    def get_formatted_amount(self, obj):
+        return f"${abs(obj.amount):,.2f}"
+
+class TransactionDetailSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    account_name = serializers.CharField(source='account.institution_name', read_only=True)
+    formatted_amount = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Transaction
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_formatted_amount(self, obj):
+        return f"${abs(obj.amount):,.2f}"
+    
+    def validate_amount(self, value):
+        if value == 0:
+            raise serializers.ValidationError("Transaction amount cannot be zero")
+        return value
+    
+    def validate_merchant_name(self, value):
+        if len(value) < 2:
+            raise serializers.ValidationError("Merchant name must be at least 2 characters")
+        return value
+
+class TransactionCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Transaction
+        fields = ['merchant_name', 'amount', 'date', 'description', 'category', 'account']
+    
+    def create(self, validated_data):
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
+```
+
+## View Guidelines
+
+### ViewSet Structure
+Use ViewSets for consistent API patterns:
+
+```python
+# ✅ Good ViewSet structure
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from django.shortcuts import get_object_or_404
+
+from .models import Transaction, Category
+from .serializers import TransactionListSerializer, TransactionDetailSerializer, TransactionCreateSerializer
+from .tasks import categorize_transaction_task
+from .permissions import IsOwnerOrReadOnly
+
+class TransactionViewSet(viewsets.ModelViewSet):
+    serializer_class = TransactionListSerializer
+    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
+    
+    def get_queryset(self):
+        queryset = Transaction.objects.for_user(self.request.user)
+        
+        # Filtering
+        category = self.request.query_params.get('category')
+        if category:
+            queryset = queryset.filter(category_id=category)
+        
+        date_from = self.request.query_params.get('date_from')
+        date_to = self.request.query_params.get('date_to')
+        if date_from:
+            queryset = queryset.filter(date__gte=date_from)
+        if date_to:
+            queryset = queryset.filter(date__lte=date_to)
+        
+        return queryset
+    
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return TransactionDetailSerializer
+        elif self.action == 'create':
+            return TransactionCreateSerializer
+        return self.serializer_class
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+    
+    @action(detail=True, methods=['post'])
+    def categorize(self, request, pk=None):
+        transaction = self.get_object()
+        category_id = request.data.get('category_id')
+        
+        if not category_id:
+            return Response(
+                {'error': 'Category ID required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        transaction.category_id = category_id
+        transaction.save()
+        
+        return Response({'status': 'categorized', 'category_id': category_id})
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        user_transactions = self.get_queryset()
+        stats = {
+            'total': user_transactions.count(),
+            'expenses': user_transactions.expenses().count(),
+            'income': user_transactions.income().count(),
+            'total_expenses': sum(t.amount for t in user_transactions.expenses()),
+            'total_income': sum(t.amount for t in user_transactions.income()),
+        }
+        return Response(stats)
+```
+
+## Celery Task Guidelines
+
+### Task Structure
+Use Celery for heavy operations and follow consistent patterns:
+
+```python
+# ✅ Good Celery task structure
+from celery import shared_task
+from django.conf import settings
+from django.core.mail import send_mail
+import logging
+
+logger = logging.getLogger(__name__)
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def sync_account_transactions(self, account_id):
+    """
+    Sync transactions from Plaid for a connected account.
+    
+    Args:
+        account_id (int): ID of the Account instance to sync
+        
+    Returns:
+        str: Success message or raises exception
+    """
+    try:
+        from .models import Account, Transaction
+        from .plaid_utils import fetch_transactions, normalize_plaid_transaction
+        
+        account = Account.objects.get(id=account_id)
+        
+        # Fetch transactions from Plaid
+        logger.info(f"Starting transaction sync for account {account_id}")
+        plaid_transactions = fetch_transactions(account.plaid_access_token)
+        
+        # Process and save transactions
+        created_count = 0
+        for plaid_txn in plaid_transactions:
+            transaction_data = normalize_plaid_transaction(plaid_txn, account)
+            
+            # Create or update transaction
+            transaction, created = Transaction.objects.update_or_create(
+                plaid_transaction_id=plaid_txn['transaction_id'],
+                defaults=transaction_data
+            )
+            
+            if created:
+                created_count += 1
+        
+        # Update last sync time
+        account.last_synced_at = timezone.now()
+        account.save()
+        
+        logger.info(f"Successfully synced {created_count} new transactions for account {account_id}")
+        return f"Account {account_id} synced successfully, {created_count} new transactions"
+        
+    except Account.DoesNotExist:
+        logger.error(f"Account {account_id} not found")
+        raise
+    except Exception as exc:
+        logger.error(f"Error syncing account {account_id}: {exc}")
+        self.retry(countdown=60, exc=exc)
+
+@shared_task
+def categorize_transaction_task(transaction_id):
+    """Automatically categorize a transaction using ML."""
+    try:
+        from .models import Transaction
+        from .categorization import auto_categorize
+        
+        transaction = Transaction.objects.get(id=transaction_id)
+        
+        # Auto-categorize if not already categorized
+        if not transaction.category:
+            category = auto_categorize(transaction)
+            if category:
+                transaction.category = category
+                transaction.save()
+                logger.info(f"Auto-categorized transaction {transaction_id} as {category.name}")
+        
+    except Transaction.DoesNotExist:
+        logger.error(f"Transaction {transaction_id} not found")
+    except Exception as exc:
+        logger.error(f"Failed to categorize transaction {transaction_id}: {exc}")
+
+@shared_task
+def send_goal_milestone_notification(goal_id, milestone_type):
+    """Send email notification when goal milestone is reached."""
+    try:
+        from apps.goals.models import Goal
+        goal = Goal.objects.get(id=goal_id)
+        
+        milestone_messages = {
+            '25_percent': f'Congratulations! You\'ve reached 25% of your goal "{goal.name}".',
+            '50_percent': f'Congratulations! You\'ve reached 50% of your goal "{goal.name}".',
+            '75_percent': f'Congratulations! You\'ve reached 75% of your goal "{goal.name}".',
+            'completed': f'Amazing! You\'ve completed your goal "{goal.name}"!',
+        }
+        
+        send_mail(
+            subject='Goal Milestone Reached!',
+            message=milestone_messages.get(milestone_type, 'Goal milestone reached'),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[goal.user.email],
+            fail_silently=False,
+        )
+    except Exception as exc:
+        logger.error(f"Failed to send notification for goal {goal_id}: {exc}")
+        raise
+```
+
+## File Upload Guidelines
+
+### Account Connection Handling
+Use DRF for account connections and Plaid integration:
+
+```python
+# ✅ Good account connection handling
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from apps.accounts.models import Account
+from .utils import validate_plaid_token, encrypt_token
+from .tasks import sync_account_transactions
+
+class AccountConnectionView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        plaid_token = request.data.get('plaid_access_token')
+        institution_id = request.data.get('institution_id')
+        
+        if not plaid_token or not institution_id:
+            return Response(
+                {'error': 'Plaid token and institution ID required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate Plaid token
+        if not validate_plaid_token(plaid_token):
+            return Response(
+                {'error': 'Invalid Plaid token'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create account record with encrypted token
+        account = Account.objects.create(
+            user=request.user,
+            institution_name=institution_id,
+            plaid_access_token=encrypt_token(plaid_token),  # Encrypt before storing
+            is_active=True
+        )
+        
+        # Start syncing transactions
+        sync_account_transactions.delay(account.id)
+        
+        return Response({
+            'account_id': account.id,
+            'status': 'connected',
+            'institution_name': institution_id
+        }, status=status.HTTP_201_CREATED)
+```
+
+## Error Handling
+
+### Consistent Error Responses
+Use consistent error handling patterns:
+
+```python
+# ✅ Good error handling
+from rest_framework.views import exception_handler
+from rest_framework.response import Response
+from rest_framework import status
+import logging
+
+logger = logging.getLogger(__name__)
+
+def custom_exception_handler(exc, context):
+    """Custom exception handler for consistent error responses."""
+    response = exception_handler(exc, context)
+    
+    if response is not None:
+        custom_response_data = {
+            'status': 'error',
+            'message': 'An error occurred',
+            'details': response.data
+        }
+        response.data = custom_response_data
+    
+    return response
+
+# ✅ Good validation error handling
+class TransactionCreateSerializer(serializers.ModelSerializer):
+    def validate_amount(self, value):
+        if value == 0:
+            raise serializers.ValidationError({
+                'amount': 'Transaction amount cannot be zero'
+            })
+        return value
+    
+    def validate_merchant_name(self, value):
+        if len(value) < 2:
+            raise serializers.ValidationError({
+                'merchant_name': 'Merchant name must be at least 2 characters long'
+            })
+        return value
+    
+    def validate(self, data):
+        # Ensure account belongs to user
+        account = data.get('account')
+        if account and account.user != self.context['request'].user:
+            raise serializers.ValidationError({
+                'account': 'Account does not belong to user'
+            })
+        return data
+```
+
+## Settings Configuration
+
+### Environment-Specific Settings
+Use separate settings files for different environments:
+
+```python
+# ✅ Good settings structure in settings/base.py
+import os
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# Security
+SECRET_KEY = os.environ.get('SECRET_KEY')
+DEBUG = False
+ALLOWED_HOSTS = []
+
+# Database
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('DB_NAME'),
+        'USER': os.environ.get('DB_USER'),
+        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
+    }
+}
+
+# Celery
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379')
+
+# File Storage
+DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
+
+# ✅ Good development settings in settings/dev.py
+from .base import *
+
+DEBUG = True
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+
+# Development-specific settings
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+CELERY_TASK_ALWAYS_EAGER = True
+```
+
+## Rationale
+
+Django guidelines ensure:
+- **Consistent architecture** - Predictable patterns across the application
+- **Better maintainability** - Standard Django patterns are well-documented
+- **Security** - Proper authentication, authorization, and input validation
+- **Performance** - Efficient database queries and caching strategies
+- **Scalability** - Proper use of Celery for background tasks
+- **Team collaboration** - Familiar Django patterns reduce learning curve

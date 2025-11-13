@@ -1,0 +1,474 @@
+---
+description: Enforce consistent code structure and organization patterns
+alwaysApply: false
+---
+# Code Structure
+
+This rule enforces consistent code organization and structure patterns across the Cashly platform to improve maintainability and developer experience.
+
+## Backend Structure
+
+### Django App Organization
+
+Each Django app should follow this consistent structure:
+
+```
+backend/apps/[app_name]/
+├── __init__.py
+├── admin.py          # Django admin configuration
+├── apps.py           # App configuration
+├── models.py         # Database models
+├── serializers.py    # DRF serializers
+├── views.py          # API views and view sets
+├── urls.py           # URL routing
+├── tasks.py          # Celery background tasks
+├── consumers.py      # WebSocket consumers (if applicable)
+├── utils.py          # App-specific utilities
+├── tests.py          # Test cases
+├── migrations/       # Database migrations
+└── management/       # Django management commands
+    └── commands/
+```
+
+### File Content Organization
+
+#### Models (`models.py`)
+```python
+# ✅ Good structure
+from django.db import models
+from django.contrib.auth.models import User
+
+# Constants
+MAX_TITLE_LENGTH = 200
+DEFAULT_STATUS = 'pending'
+
+# Abstract base classes
+class TimestampedModel(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        abstract = True
+
+# Main models
+class Summary(TimestampedModel):
+    title = models.CharField(max_length=MAX_TITLE_LENGTH)
+    content = models.TextField()
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Summary'
+        verbose_name_plural = 'Summaries'
+    
+    def __str__(self):
+        return self.title
+
+# Managers
+class SummaryManager(models.Manager):
+    def for_user(self, user):
+        return self.filter(user=user)
+```
+
+#### Serializers (`serializers.py`)
+```python
+# ✅ Good structure
+from rest_framework import serializers
+from .models import Summary
+
+# Base serializers
+class BaseSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Summary
+        fields = ['id', 'title', 'created_at']
+
+# Specific serializers
+class SummaryListSerializer(BaseSummarySerializer):
+    pass
+
+class SummaryDetailSerializer(BaseSummarySerializer):
+    content = serializers.CharField()
+    processing_status = serializers.CharField(read_only=True)
+    
+    class Meta(BaseSummarySerializer.Meta):
+        fields = BaseSummarySerializer.Meta.fields + [
+            'content', 'processing_status'
+        ]
+
+class SummaryCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Summary
+        fields = ['title', 'content']
+    
+    def validate_title(self, value):
+        if len(value) < 5:
+            raise serializers.ValidationError("Title must be at least 5 characters")
+        return value
+```
+
+#### Views (`views.py`)
+```python
+# ✅ Good structure
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from .models import Summary
+from .serializers import SummaryListSerializer, SummaryDetailSerializer
+from .tasks import process_summary_task
+
+class SummaryViewSet(viewsets.ModelViewSet):
+    queryset = Summary.objects.all()
+    serializer_class = SummaryListSerializer
+    
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return SummaryDetailSerializer
+        return self.serializer_class
+    
+    def perform_create(self, serializer):
+        summary = serializer.save(user=self.request.user)
+        process_summary_task.delay(summary.id)
+    
+    @action(detail=True, methods=['post'])
+    def regenerate(self, request, pk=None):
+        summary = self.get_object()
+        process_summary_task.delay(summary.id)
+        return Response({'status': 'regeneration_started'})
+```
+
+#### Tasks (`tasks.py`)
+```python
+# ✅ Good structure
+from celery import shared_task
+from django.conf import settings
+from .models import Summary
+from .ai_utils import transcribe_audio, generate_summary
+
+@shared_task(bind=True, max_retries=3)
+def process_audio_summary(self, summary_id):
+    try:
+        summary = Summary.objects.get(id=summary_id)
+        
+        # Update status
+        summary.processing_status = 'transcribing'
+        summary.save()
+        
+        # Process audio
+        transcript = transcribe_audio(summary.audio_file)
+        
+        # Generate summary
+        summary_content = generate_summary(transcript)
+        
+        # Update summary
+        summary.content = summary_content
+        summary.processing_status = 'completed'
+        summary.save()
+        
+        return f"Summary {summary_id} processed successfully"
+        
+    except Exception as exc:
+        self.retry(countdown=60, exc=exc)
+```
+
+### Import Order
+
+Follow this import order in all Python files:
+
+```python
+# ✅ Good import order
+# 1. Standard library imports
+import os
+import json
+from datetime import datetime
+
+# 2. Third-party imports
+from django.db import models
+from rest_framework import serializers
+from celery import shared_task
+
+# 3. Local application imports
+from .models import Summary
+from ..accounts.models import User
+from .utils import validate_file_type
+```
+
+## Frontend Structure
+
+### Directory Organization
+
+```
+frontend/src/
+├── components/
+│   ├── common/           # Reusable UI components
+│   │   ├── Button.jsx
+│   │   ├── Modal.jsx
+│   │   └── LoadingSpinner.jsx
+│   ├── pages/            # Page-level components
+│   │   ├── UploadPage.jsx
+│   │   ├── HistoryPage.jsx
+│   │   └── SummaryPage.jsx
+│   └── layout/           # Layout components
+│       ├── Navbar.jsx
+│       └── Footer.jsx
+├── hooks/                # Custom React hooks
+│   ├── useAuth.js
+│   ├── useSummaryWebSocket.js
+│   └── useFileUpload.js
+├── context/              # React context providers
+│   ├── AuthContext.js
+│   └── SummaryContext.js
+├── utils/                # Utility functions
+│   ├── api.js
+│   ├── formatters.js
+│   └── validators.js
+├── assets/               # Static assets
+│   ├── images/
+│   └── icons/
+├── App.jsx
+└── main.jsx
+```
+
+### Component Structure
+
+#### Page Components
+```jsx
+// ✅ Good page component structure
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+// Components
+import Button from '../common/Button';
+import LoadingSpinner from '../common/LoadingSpinner';
+
+// Hooks
+import { useAuth } from '../../hooks/useAuth';
+import { useSummaryWebSocket } from '../../hooks/useSummaryWebSocket';
+
+// Utils
+import { uploadFile } from '../../utils/api';
+
+// Constants
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+
+function UploadPage() {
+    // State
+    const [file, setFile] = useState(null);
+    const [uploading, setUploading] = useState(false);
+    const [error, setError] = useState(null);
+    
+    // Hooks
+    const { user } = useAuth();
+    const navigate = useNavigate();
+    const { connect, disconnect } = useSummaryWebSocket();
+    
+    // Effects
+    useEffect(() => {
+        connect();
+        return () => disconnect();
+    }, [connect, disconnect]);
+    
+    // Event handlers
+    const handleFileSelect = (event) => {
+        const selectedFile = event.target.files[0];
+        if (selectedFile && selectedFile.size > MAX_FILE_SIZE) {
+            setError('File size exceeds 100MB limit');
+            return;
+        }
+        setFile(selectedFile);
+        setError(null);
+    };
+    
+    const handleSubmit = async (event) => {
+        event.preventDefault();
+        if (!file) return;
+        
+        setUploading(true);
+        try {
+            const summary = await uploadFile(file);
+            navigate(`/summary/${summary.id}`);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setUploading(false);
+        }
+    };
+    
+    // Render
+    return (
+        <div className="upload-page">
+            <h1>Upload Audio/Video</h1>
+            
+            <form onSubmit={handleSubmit}>
+                <input
+                    type="file"
+                    accept="audio/*,video/*"
+                    onChange={handleFileSelect}
+                />
+                
+                {error && <div className="error">{error}</div>}
+                
+                <Button
+                    type="submit"
+                    disabled={!file || uploading}
+                >
+                    {uploading ? <LoadingSpinner /> : 'Upload'}
+                </Button>
+            </form>
+        </div>
+    );
+}
+
+export default UploadPage;
+```
+
+#### Custom Hooks
+```jsx
+// ✅ Good hook structure
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from './useAuth';
+import { api } from '../utils/api';
+
+// Constants
+const RECONNECT_DELAY = 5000;
+const MAX_RECONNECT_ATTEMPTS = 5;
+
+function useSummaryWebSocket(summaryId) {
+    // State
+    const [socket, setSocket] = useState(null);
+    const [connected, setConnected] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [error, setError] = useState(null);
+    
+    // Dependencies
+    const { token } = useAuth();
+    
+    // Callbacks
+    const connect = useCallback(() => {
+        if (!summaryId || !token) return;
+        
+        const ws = new WebSocket(`ws://localhost:8000/ws/summary/${summaryId}/`);
+        
+        ws.onopen = () => {
+            setConnected(true);
+            setError(null);
+        };
+        
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'progress') {
+                setProgress(data.progress);
+            }
+        };
+        
+        ws.onclose = () => {
+            setConnected(false);
+            // Implement reconnection logic
+        };
+        
+        ws.onerror = (error) => {
+            setError('WebSocket connection failed');
+        };
+        
+        setSocket(ws);
+    }, [summaryId, token]);
+    
+    const disconnect = useCallback(() => {
+        if (socket) {
+            socket.close();
+            setSocket(null);
+            setConnected(false);
+        }
+    }, [socket]);
+    
+    // Effects
+    useEffect(() => {
+        connect();
+        return disconnect;
+    }, [connect, disconnect]);
+    
+    // Return hook interface
+    return {
+        connected,
+        progress,
+        error,
+        connect,
+        disconnect
+    };
+}
+
+export { useSummaryWebSocket };
+```
+
+### Import Order (Frontend)
+
+```jsx
+// ✅ Good import order
+// 1. React imports
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+// 2. Third-party imports
+import axios from 'axios';
+import { toast } from 'react-toastify';
+
+// 3. Local component imports
+import Button from '../common/Button';
+import LoadingSpinner from '../common/LoadingSpinner';
+
+// 4. Local hook imports
+import { useAuth } from '../../hooks/useAuth';
+
+// 5. Local utility imports
+import { api } from '../../utils/api';
+import { formatDate } from '../../utils/formatters';
+
+// 6. Local constant imports
+import { MAX_FILE_SIZE } from '../../constants/limits';
+```
+
+## Function Organization
+
+### Order of Functions Within Files
+
+```python
+# ✅ Good function order
+# 1. Constants and configuration
+MAX_RETRIES = 3
+DEFAULT_TIMEOUT = 30
+
+# 2. Helper functions (private)
+def _validate_file_type(file_path):
+    """Validate file type based on extension."""
+    pass
+
+def _generate_unique_filename(original_name):
+    """Generate unique filename for storage."""
+    pass
+
+# 3. Main business logic functions
+def process_uploaded_file(file):
+    """Process uploaded file and return metadata."""
+    pass
+
+def create_summary_from_file(file, user):
+    """Create summary record from uploaded file."""
+    pass
+
+# 4. Public API functions
+def upload_file_endpoint(request):
+    """Handle file upload API request."""
+    pass
+
+# 5. Exports (if applicable)
+__all__ = ['upload_file_endpoint', 'create_summary_from_file']
+```
+
+## Rationale
+
+Consistent code structure provides:
+- **Predictable organization** - Developers know where to find specific code
+- **Easier navigation** - Familiar patterns reduce cognitive load
+- **Better maintainability** - Consistent structure makes refactoring safer
+- **Team collaboration** - New team members can quickly understand the codebase
+- **Tooling support** - IDEs can provide better autocomplete and refactoring
+- **Code reviews** - Consistent structure makes reviews more efficient

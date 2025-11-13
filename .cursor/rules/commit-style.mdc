@@ -1,0 +1,240 @@
+---
+description: Enforce Conventional Commit style in commit messages
+alwaysApply: false
+---
+# Commit Style
+
+This rule ensures all commit messages follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification for clarity, automation, and consistency across the Cashly project.
+
+## Commit Message Format
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Required Elements
+
+- **Type**: One of the allowed types (see below)
+- **Description**: Concise, imperative mood description of the change
+- **Scope**: Optional, indicates the area of codebase affected
+
+### Optional Elements
+
+- **Body**: Detailed explanation of what and why (not how)
+- **Footer**: Breaking changes, issue references, co-authors
+
+## Allowed Types
+| Type | Description | Example |
+|------|-------------|---------|
+| `feat` | New feature for users | `feat(api): add PDF generation endpoint` |
+| `fix` | Bug fix | `fix(auth): resolve JWT token expiration issue` |
+| `refactor` | Code change that neither fixes bug nor adds feature | `refactor(api): simplify transaction processing logic` |
+| `chore` | Maintenance tasks, dependencies, tooling | `chore: update Django to 5.0.1` |
+| `docs` | Documentation changes | `docs: update API documentation` |
+| `test` | Adding or updating tests | `test(api): add unit tests for transaction creation` |
+| `style` | Code style changes (formatting, semicolons, etc.) | `style: fix ESLint warnings` |
+| `perf` | Performance improvements | `perf(api): optimize database queries` |
+| `ci` | CI/CD pipeline changes | `ci: add GitHub Actions workflow` |
+
+## Examples
+
+### ✅ Good Examples
+
+```bash
+# Feature additions
+feat(api): add transaction creation endpoint
+feat(frontend): implement real-time account sync updates
+feat(accounts): add Plaid account connection support
+
+# Bug fixes
+fix(api): resolve transaction amount validation error
+fix(frontend): fix account sync reconnection logic
+fix(auth): handle expired JWT tokens gracefully
+
+# Refactoring
+refactor(api): extract common transaction validation logic
+refactor(frontend): simplify dashboard state management
+refactor(celery): improve transaction sync error handling
+
+# Documentation
+docs: update README with setup instructions
+docs(api): add endpoint documentation
+docs(frontend): document component props
+
+# Testing
+test(api): add unit tests for transaction serializers
+test(frontend): add component integration tests
+test(celery): add transaction sync task tests
+
+# Maintenance
+chore: update dependencies to latest versions
+chore: configure ESLint rules
+chore: add pre-commit hooks
+
+# Performance
+perf(api): optimize database queries in transaction list
+perf(frontend): implement virtual scrolling for large transaction lists
+perf(celery): reduce memory usage in transaction processing
+```
+
+### ❌ Bad Examples
+
+```bash
+# Vague descriptions
+added stuff
+fixed bug
+updated code
+
+# Wrong mood (not imperative)
+feat(api): adds transaction creation endpoint
+fix(auth): fixed JWT token issue
+docs: updated README
+
+# Missing type
+add transaction creation endpoint
+fix JWT token issue
+update dependencies
+
+# Too long descriptions
+feat(api): add comprehensive transaction creation endpoint with validation, error handling, and response formatting
+
+# Inconsistent formatting
+feat(API): add transaction creation endpoint
+feat(api): Add transaction creation endpoint
+feat(api):add transaction creation endpoint
+```
+
+## Scope Guidelines
+
+### Backend Scopes
+- `api` - API endpoints, serializers, views
+- `auth` - Authentication, authorization, user management
+- `celery` - Background tasks, task queues
+- `models` - Database models, migrations
+- `transactions` - Transaction management, categorization
+- `accounts` - Account connection, Plaid integration
+- `goals` - Savings goals, progress tracking
+- `budgets` - Budget management, spending limits
+
+### Frontend Scopes
+- `components` - React components
+- `hooks` - Custom React hooks
+- `utils` - Utility functions, helpers
+- `auth` - Authentication UI, login/signup
+- `dashboard` - Dashboard, overview components
+- `transactions` - Transaction list, detail views
+- `goals` - Savings goals interface
+- `analytics` - Spending analytics, charts
+
+### Infrastructure Scopes
+- `docker` - Docker configuration, containers
+- `ci` - CI/CD pipelines, GitHub Actions
+- `deploy` - Deployment scripts, configuration
+- `env` - Environment variables, configuration
+
+## Body Guidelines
+
+Use the body to explain:
+- **What** changed and **why**
+- **Impact** on users or system
+- **Breaking changes** (use `BREAKING CHANGE:` footer)
+- **Migration steps** if needed
+
+```bash
+feat(accounts): add Plaid account connection
+
+Allow users to connect bank accounts via Plaid integration
+for automatic transaction import and tracking.
+
+- Add Account model with Plaid token encryption
+- Implement Plaid OAuth flow for account connection
+- Add transaction sync background task
+- Enforce account ownership and security
+
+BREAKING CHANGE: Account connection now requires Plaid
+access token instead of manual account entry.
+```
+
+## Footer Guidelines
+
+### Breaking Changes
+```bash
+BREAKING CHANGE: <description of breaking change>
+```
+
+### Issue References
+```bash
+Closes #123
+Fixes #456
+Refs #789
+```
+
+### Co-authors
+```bash
+Co-authored-by: John Doe <john@example.com>
+```
+
+## Complete Examples
+
+### Feature with Breaking Change
+```bash
+feat(api): implement transaction categorization system
+
+Replace manual category assignment with automatic ML-based
+categorization and improved category management.
+
+- Add Category model with predefined expense/income categories
+- Implement automatic transaction categorization
+- Update serializers to include category information
+- Maintain backward compatibility for uncategorized transactions
+
+BREAKING CHANGE: Transaction API responses now include
+category field with structured category data.
+
+Closes #234
+```
+
+### Bug Fix with Issue Reference
+```bash
+fix(frontend): resolve account sync reconnection infinite loop
+
+Prevent multiple reconnection attempts when account sync
+WebSocket connection fails, causing UI freezing and excessive
+network requests.
+
+- Add reconnection attempt counter
+- Implement exponential backoff
+- Add connection state validation
+
+Fixes #567
+```
+
+### Refactoring with Performance Impact
+```bash
+refactor(celery): optimize transaction sync pipeline
+
+Improve memory usage and processing speed for large
+transaction batches by implementing batch processing
+and better error handling.
+
+- Implement batch transaction processing
+- Add progress tracking for long sync operations
+- Reduce memory footprint by 40%
+- Improve error recovery mechanisms
+
+Performance improvement: 40% reduction in memory usage
+for accounts with > 1000 transactions.
+```
+
+## Rationale
+
+Conventional commits provide:
+- **Clear communication** - Team members understand changes at a glance
+- **Automated tooling** - Generate changelogs, version bumps, release notes
+- **Better git history** - Easy to search and filter commits by type
+- **Consistent standards** - Reduces decision fatigue and improves collaboration
+- **Integration support** - Works with GitHub, GitLab, and other platforms
