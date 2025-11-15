@@ -72,5 +72,16 @@ htmlcov/
 # Docker
 .dockerignore
 
+# IDE and Tool Configuration
+# Note: .cursor/rules/ contains project-wide coding standards and should remain tracked
+.cursor/commands/
+
+# Taskmaster AI Tooling
+.taskmaster/config.json
+.taskmaster/state.json
+.taskmaster/tasks/
+.taskmaster/reports/
+# Keep .taskmaster/docs/ and .taskmaster/templates/ if you want to share them
+
 # Documentation and Planning Files
 cashly-todo.md
