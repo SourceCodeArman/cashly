@@ -17,11 +17,31 @@ class User(AbstractUser):
     preferences = models.JSONField(default=dict, blank=True)
     subscription_tier = models.CharField(
         max_length=20,
-        choices=[('free', 'Free'), ('premium', 'Premium')],
+        choices=[('free', 'Free'), ('premium', 'Premium'), ('pro', 'Pro')],
         default='free'
+    )
+    stripe_customer_id = models.CharField(
+        max_length=255,
+        unique=True,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Stripe customer ID"
+    )
+    subscription_status = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        help_text="Current subscription status (active, trialing, past_due, canceled, etc.)"
+    )
+    subscription_end_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Date when subscription ends"
     )
     mfa_enabled = models.BooleanField(default=False)
     mfa_secret = models.CharField(max_length=255, blank=True, null=True)
+    tour_done = models.BooleanField(default=False, help_text="Whether the user has completed the welcome tour")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -35,6 +55,42 @@ class User(AbstractUser):
     
     def __str__(self):
         return self.email
+
+    def has_active_subscription(self):
+        """
+        Check if user has an active subscription.
+        
+        Prefers Subscription model over user.subscription_tier field.
+        
+        Returns:
+            True if user has an active subscription, False otherwise
+        """
+        try:
+            from apps.subscriptions.services import is_subscription_active
+            return is_subscription_active(self)
+        except Exception:
+            # Fallback to checking subscription_tier and dates
+            if self.subscription_tier in ['premium', 'pro']:
+                if self.subscription_end_date:
+                    return timezone.now() < self.subscription_end_date
+                return self.subscription_status in ['active', 'trialing']
+            return False
+    
+    def get_subscription_tier(self):
+        """
+        Get user's subscription tier.
+        
+        Prefers Subscription model over user.subscription_tier field.
+        
+        Returns:
+            Subscription tier: 'free', 'premium', or 'pro'
+        """
+        try:
+            from apps.subscriptions.services import get_user_tier
+            return get_user_tier(self)
+        except Exception:
+            # Fallback to subscription_tier field
+            return self.subscription_tier or 'free'
 
 
 class AccountQuerySet(models.QuerySet):

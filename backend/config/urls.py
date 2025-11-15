@@ -37,6 +37,8 @@ urlpatterns = [
     path('api/v1/goals/', include('apps.goals.urls')),
     path('api/v1/budgets/', include('apps.budgets.urls')),
     path('api/v1/dashboard/', include('apps.analytics.urls')),
+    path('api/v1/notifications/', include('apps.notifications.urls')),
+    path('api/v1/subscriptions/', include('apps.subscriptions.urls')),
     path('api/v1/health/', include('apps.api.urls')),
 ]
 

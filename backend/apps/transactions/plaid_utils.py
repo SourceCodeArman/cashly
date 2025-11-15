@@ -153,7 +153,26 @@ def fetch_transactions(account, start_date=None, end_date=None):
         return transactions
     except ApiException as exc:
         logger.error(f"Plaid API error fetching transactions for account {account.account_id}: {exc}")
-        raise PlaidIntegrationError(f"Failed to fetch transactions: {exc.body}") from exc
+        # Parse Plaid error response to extract error code and type
+        error_code = None
+        error_type = None
+        error_message = str(exc.body) if exc.body else "Unknown Plaid error"
+        
+        try:
+            import json
+            if exc.body:
+                error_body = json.loads(exc.body) if isinstance(exc.body, str) else exc.body
+                error_code = error_body.get('error_code')
+                error_type = error_body.get('error_type')
+                error_message = error_body.get('error_message', error_message)
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            pass
+        
+        raise PlaidIntegrationError(
+            f"Failed to fetch transactions: {error_message}",
+            error_code=error_code,
+            error_type=error_type
+        ) from exc
     except Exception as e:
         logger.error(f"Error fetching transactions for account {account.account_id}: {str(e)}", exc_info=True)
         raise PlaidIntegrationError("Failed to fetch transactions") from e

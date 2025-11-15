@@ -8,6 +8,7 @@ from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.db.models import Count
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
@@ -15,6 +16,7 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.conf import settings
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 
@@ -26,12 +28,14 @@ from .serializers import (
     PasswordResetSerializer,
     PasswordResetConfirmSerializer,
     AccountSerializer,
+    AccountWithCountSerializer,
     LinkTokenRequestSerializer,
     AccountConnectionSerializer,
     PlaidAssetSerializer,
     PlaidAuthSerializer,
     PlaidIdentitySerializer,
     PlaidInvestmentSerializer,
+    TransferCreateSerializer,
 )
 from .plaid_utils import (
     PlaidIntegrationError,
@@ -195,6 +199,9 @@ class CreateLinkTokenView(generics.GenericAPIView):
     """
     POST /api/v1/accounts/create-link-token
     Create Plaid Link token for account connection.
+    
+    Checks subscription limits before creating the token to prevent
+    users from going through Plaid flow if they've exceeded their limit.
     """
     serializer_class = LinkTokenRequestSerializer
     permission_classes = [IsAuthenticated]
@@ -203,6 +210,82 @@ class CreateLinkTokenView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data or {})
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        
+        # Check subscription limit BEFORE creating Plaid Link token
+        # This prevents users from going through Plaid flow if they're over limit
+        try:
+            from apps.subscriptions.limit_service import SubscriptionLimitService
+            from apps.subscriptions.exceptions import (
+                SubscriptionLimitExceeded,
+                SubscriptionExpired,
+            )
+            from apps.subscriptions.limits import FEATURE_ACCOUNTS
+            from apps.subscriptions.services import get_user_subscription_status
+            
+            # Count existing active accounts
+            current_account_count = Account.objects.for_user(request.user).active().count()
+            
+            # Get user's subscription status and limit
+            status_info = get_user_subscription_status(request.user)
+            limit = SubscriptionLimitService.get_limit(request.user, FEATURE_ACCOUNTS)
+            from apps.subscriptions.limits import is_unlimited
+            
+            # Debug logging
+            logger.info(
+                f"Link token limit check for user {request.user.id}: "
+                f"current_count={current_account_count}, limit={limit}, "
+                f"tier={status_info['tier']}, is_unlimited={is_unlimited(limit) if limit else None}"
+            )
+            
+            # Check if user has exceeded or would exceed limit
+            # Convert limit to int for consistent comparison
+            limit_int = int(limit) if limit is not None and not is_unlimited(limit) else None
+            is_unlimited_limit = is_unlimited(limit)
+            
+            logger.info(
+                f"Link token limit check comparison: "
+                f"current_count={current_account_count}, limit_int={limit_int}, "
+                f"is_unlimited={is_unlimited_limit}, "
+                f"check_result={not is_unlimited_limit and current_account_count >= limit_int if limit_int else False}"
+            )
+            
+            if not is_unlimited_limit and limit_int is not None and current_account_count >= limit_int:
+                # User has reached or exceeded their limit
+                tier_display = status_info['tier'].title()
+                
+                # Create helpful error message
+                error_message = (
+                    f"You've reached your account limit ({limit_int} account{'s' if limit_int != 1 else ''}) "
+                    f"for the {tier_display} tier. "
+                    f"You currently have {current_account_count} connected account{'s' if current_account_count != 1 else ''}. "
+                    f"To connect a new account, you can either upgrade your subscription or disconnect an existing account."
+                )
+                
+                return Response({
+                    'status': 'error',
+                    'data': None,
+                    'message': error_message,
+                    'error_code': 'SUBSCRIPTION_LIMIT_EXCEEDED',
+                    'error_details': {
+                        'feature': FEATURE_ACCOUNTS,
+                        'current_count': current_account_count,
+                        'limit': limit_int,
+                        'tier': status_info['tier'],
+                        'upgrade_required': True,
+                        'suggestions': [
+                            'Upgrade your subscription to increase your account limit',
+                            'Disconnect an existing account to make room for a new one'
+                        ]
+                    }
+                }, status=status.HTTP_403_FORBIDDEN)
+        except SubscriptionExpired as e:
+            logger.info(f"Subscription expired for user {request.user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except Exception as e:
+            logger.error(f"Error checking account limit for user {request.user.id}: {e}", exc_info=True)
+            # Don't block link token creation if limit check fails, but log it
+        
+        # Proceed with creating Plaid Link token
         try:
             link_token = create_link_token(
                 request.user,
@@ -240,9 +323,39 @@ class AccountConnectionView(generics.GenericAPIView):
         institution_id = serializer.validated_data["institution_id"]
         institution_name = serializer.validated_data.get("institution_name")
         selected_account_ids = serializer.validated_data.get("selected_account_ids") or []
+        account_custom_names = serializer.validated_data.get("account_custom_names") or {}
         webhook_url = serializer.validated_data.get("webhook") or getattr(
             settings, "PLAID_WEBHOOK_URL", ""
         )
+
+        # Check subscription limit before connecting accounts
+        # Do initial check early to fail fast if user already exceeds limit
+        try:
+            from apps.subscriptions.limit_service import SubscriptionLimitService
+            from apps.subscriptions.exceptions import (
+                SubscriptionLimitExceeded,
+                SubscriptionExpired,
+            )
+            from apps.subscriptions.limits import FEATURE_ACCOUNTS
+            
+            # Count existing active accounts
+            current_account_count = Account.objects.for_user(user).active().count()
+            
+            # Enforce limit - this will raise if user already exceeds limit
+            SubscriptionLimitService.enforce_limit(
+                user=user,
+                feature_type=FEATURE_ACCOUNTS,
+                current_count=current_account_count
+            )
+        except SubscriptionLimitExceeded as e:
+            logger.info(f"Account limit already exceeded for user {user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except SubscriptionExpired as e:
+            logger.info(f"Subscription expired for user {user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except Exception as e:
+            logger.error(f"Error checking account limit for user {user.id}: {e}", exc_info=True)
+            # Don't block account connection if limit check fails, but log it
 
         try:
             exchange_data = exchange_public_token(public_token)
@@ -261,6 +374,64 @@ class AccountConnectionView(generics.GenericAPIView):
 
             if not accounts_data:
                 raise PlaidIntegrationError("No accounts returned for Plaid item.")
+            
+            # Check limit again with actual number of accounts to be created
+            # This ensures we check limits even if user is reconnecting (update_or_create)
+            try:
+                from apps.subscriptions.limit_service import SubscriptionLimitService
+                from apps.subscriptions.exceptions import SubscriptionLimitExceeded
+                from apps.subscriptions.limits import FEATURE_ACCOUNTS
+                
+                # Get current account count again (in case it changed)
+                current_account_count = Account.objects.for_user(user).active().count()
+                
+                # Count unique accounts (by plaid_account_id) that don't exist yet
+                existing_plaid_ids = set(
+                    Account.objects.for_user(user)
+                    .values_list('plaid_account_id', flat=True)
+                )
+                
+                new_accounts_count = sum(
+                    1 for acct in accounts_data
+                    if acct["account_id"] not in existing_plaid_ids
+                )
+                
+                # Check if adding these new accounts would exceed limit
+                if new_accounts_count > 0:
+                    # Get the limit for user's tier
+                    limit = SubscriptionLimitService.get_limit(user, FEATURE_ACCOUNTS)
+                    from apps.subscriptions.limits import is_unlimited
+                    from apps.subscriptions.services import get_user_subscription_status
+                    
+                    # Check if limit would be exceeded
+                    if not is_unlimited(limit):
+                        if current_account_count + new_accounts_count > limit:
+                            # User would exceed limit with these new accounts
+                            status_info = get_user_subscription_status(user)
+                            raise SubscriptionLimitExceeded(
+                                feature=FEATURE_ACCOUNTS,
+                                current_count=current_account_count,
+                                limit=int(limit),
+                                tier=status_info['tier'],
+                                message=(
+                                    f"Adding {new_accounts_count} account(s) would exceed your subscription limit. "
+                                    f"Current usage: {current_account_count}/{limit} accounts (Tier: {status_info['tier']}). "
+                                    f"Please upgrade your subscription to continue."
+                                )
+                            )
+                    
+                    # Also check current count in case user already exceeds limit
+                    SubscriptionLimitService.enforce_limit(
+                        user=user,
+                        feature_type=FEATURE_ACCOUNTS,
+                        current_count=current_account_count
+                    )
+            except SubscriptionLimitExceeded as e:
+                logger.info(f"Account limit would be exceeded for user {user.id}: {e}")
+                return Response(e.to_dict(), status=e.status_code)
+            except Exception as e:
+                logger.error(f"Error checking account limit: {e}", exc_info=True)
+                # Continue with account creation if limit check fails
                 
             created_accounts = []
             with transaction.atomic():
@@ -284,9 +455,26 @@ class AccountConnectionView(generics.GenericAPIView):
                         or "Financial Institution"
                     )
 
+                    # Get custom name if provided, otherwise use Plaid account name
+                    custom_name = account_custom_names.get(plaid_account_id)
+                    # Only set custom_name if it's not empty
+                    if custom_name and custom_name.strip():
+                        custom_name = custom_name.strip()
+                    else:
+                        # If no custom name provided, use the Plaid account name
+                        # This ensures accounts display with their actual names (e.g., "Plaid Checking")
+                        # instead of just the institution name
+                        plaid_account_name = (
+                            account_payload.get("official_name")
+                            or account_payload.get("name")
+                            or None
+                        )
+                        custom_name = plaid_account_name
+
                     defaults = {
                         "user": user,
                         "institution_name": derived_institution_name,
+                        "custom_name": custom_name,
                         "account_type": account_type,
                         "account_number_masked": f"****{mask[-4:]}",
                         "balance": balances.get("current") or balances.get("available") or 0,
@@ -394,8 +582,131 @@ class AccountViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsAccountOwner]
     
     def get_queryset(self):
-        """Return accounts for the current user."""
-        return Account.objects.for_user(self.request.user)
+        """Return accounts for the current user (including inactive accounts)."""
+        return Account.objects.for_user(self.request.user).order_by('-created_at', 'institution_name')
+    
+    def create(self, request, *args, **kwargs):
+        """
+        Create account with subscription limit checking.
+        
+        Note: Account creation is typically done through AccountConnectionView,
+        but this method provides limit checking for direct creation if needed.
+        """
+        # Check subscription limit before creating account
+        try:
+            from apps.subscriptions.limit_service import SubscriptionLimitService
+            from apps.subscriptions.exceptions import (
+                SubscriptionLimitExceeded,
+                SubscriptionExpired,
+            )
+            from apps.subscriptions.limits import FEATURE_ACCOUNTS
+            
+            current_count = Account.objects.for_user(request.user).active().count()
+            SubscriptionLimitService.enforce_limit(
+                user=request.user,
+                feature_type=FEATURE_ACCOUNTS,
+                current_count=current_count
+            )
+        except SubscriptionLimitExceeded as e:
+            logger.info(f"Account limit exceeded for user {request.user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except SubscriptionExpired as e:
+            logger.info(f"Subscription expired for user {request.user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except Exception as e:
+            logger.error(f"Error checking account limit: {e}", exc_info=True)
+            # Don't block if limit check fails
+        
+        return super().create(request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        """
+        DELETE /api/v1/accounts/:id/
+        Delete/disconnect an account.
+        """
+        account = self.get_object()
+        
+        # Try to disconnect from Plaid if it's a Plaid account
+        if account.plaid_item_id:
+            try:
+                service = PlaidService(account)
+                remove_item(service.access_token)
+            except PlaidIntegrationError as exc:
+                logger.warning("Failed to remove Plaid item for account %s: %s", account.account_id, exc)
+        
+        # Delete the account
+        account.delete()
+
+        return Response(
+            {
+                "status": "success",
+                "data": None,
+                "message": "Account deleted successfully",
+            },
+            status=status.HTTP_200_OK,
+        )
+    
+    @action(detail=True, methods=['post'])
+    def deactivate(self, request, pk=None):
+        """
+        POST /api/v1/accounts/:id/deactivate/
+        Deactivate an account (hides transactions and goals but doesn't delete).
+        """
+        account = self.get_object()
+        
+        if not account.is_active:
+            return Response(
+                {
+                    "status": "error",
+                    "data": None,
+                    "message": "Account is already inactive",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        account.is_active = False
+        account.save()
+        
+        serializer = self.get_serializer(account)
+        return Response(
+            {
+                "status": "success",
+                "data": serializer.data,
+                "message": "Account deactivated successfully",
+            },
+            status=status.HTTP_200_OK,
+        )
+    
+    @action(detail=True, methods=['post'])
+    def activate(self, request, pk=None):
+        """
+        POST /api/v1/accounts/:id/activate/
+        Activate a previously deactivated account.
+        """
+        account = self.get_object()
+        
+        if account.is_active:
+            return Response(
+                {
+                    "status": "error",
+                    "data": None,
+                    "message": "Account is already active",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        account.is_active = True
+        account.save()
+        
+        serializer = self.get_serializer(account)
+        return Response(
+            {
+                "status": "success",
+                "data": serializer.data,
+                "message": "Account activated successfully",
+            },
+            status=status.HTTP_200_OK,
+        )
     
     @action(detail=True, methods=['post'], url_path='disconnect')
     def disconnect(self, request, pk=None):
@@ -479,6 +790,24 @@ class AccountViewSet(viewsets.ModelViewSet):
             'status': 'success',
             'data': {'account_id': str(account.account_id)},
             'message': 'Account sync initiated'
+        }, status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['get'], url_path='with-counts')
+    def with_counts(self, request):
+        """
+        GET /api/v1/accounts/with-counts/
+        Get accounts with transaction counts, filtered to only show accounts with transactions.
+        """
+        queryset = Account.objects.for_user(request.user).annotate(
+            transaction_count=Count('transactions')
+        ).filter(transaction_count__gt=0).order_by('-created_at', 'institution_name')
+        
+        serializer = AccountWithCountSerializer(queryset, many=True)
+        
+        return Response({
+            'status': 'success',
+            'data': serializer.data,
+            'message': 'Accounts retrieved successfully'
         }, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['get'], url_path='auth-data')
@@ -639,3 +968,127 @@ class AccountViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+    
+    @action(detail=True, methods=['post'], url_path='transfer')
+    def transfer(self, request, pk=None):
+        """
+        POST /api/v1/accounts/:id/transfer/
+        
+        Execute a transfer from this account (source) to destination account.
+        
+        SECURITY REQUIREMENTS:
+        - REQUIRES: Goal with transfer_authorized=True
+        - REQUIRES: Valid active authorization for the goal
+        - REQUIRES: Source account must be the one making the request
+        - REQUIRES: Destination account must belong to user
+        - REQUIRES: Destination account must match goal's destination account
+        
+        Request Body:
+        {
+            "destination_account_id": "uuid",
+            "amount": "100.00",
+            "goal_id": "uuid",
+            "description": "Goal contr" (optional, max 10 chars - Plaid API limit)
+        }
+        
+        Response:
+        {
+            "status": "success",
+            "data": {
+                "transfer_id": "plaid_transfer_id",
+                "amount": "100.00",
+                "status": "pending",
+                "source_account_id": "uuid",
+                "destination_account_id": "uuid",
+                "goal_id": "uuid"
+            },
+            "message": "Transfer initiated successfully"
+        }
+        """
+        # Get source account (the account this endpoint is called on)
+        source_account = self.get_object()
+        
+        # Validate request data
+        serializer = TransferCreateSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        
+        # Extract validated data
+        destination_account_id = str(serializer.validated_data['destination_account_id'])
+        goal_id = str(serializer.validated_data['goal_id'])
+        amount = serializer.validated_data['amount']
+        description = serializer.validated_data.get('description', 'Goal contribution')
+        
+        # Verify source account matches the account in the URL
+        # (IsAccountOwner permission already ensures user owns source_account)
+        source_account_id = str(source_account.account_id)
+        
+        try:
+            # Import here to avoid circular dependencies
+            from apps.accounts.transfer_service import execute_transfer
+            
+            # Execute transfer using transfer service
+            # This function performs all security checks including transfer_authorized verification
+            transfer_result = execute_transfer(
+                goal_id=goal_id,
+                source_account_id=source_account_id,
+                destination_account_id=destination_account_id,
+                amount=amount,
+                user=request.user,
+                description=description
+            )
+            
+            return Response({
+                'status': 'success',
+                'data': {
+                    **transfer_result,
+                    'status_details': {
+                        'authorization_created': transfer_result.get('authorization_created', False),
+                        'transfer_created': True,
+                        'transaction_created': transfer_result.get('transaction_created', False),
+                    }
+                },
+                'message': transfer_result.get('message', 'Transfer initiated successfully')
+            }, status=status.HTTP_200_OK)
+            
+        except PlaidIntegrationError as exc:
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': str(exc),
+                'error_code': 'PLAID_ERROR'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except ValidationError as exc:
+            # Handle validation errors from transfer_service
+            error_message = str(exc)
+            if hasattr(exc, 'message_dict'):
+                error_message = ', '.join([
+                    f"{k}: {', '.join(v)}" 
+                    for k, v in exc.message_dict.items()
+                ])
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': error_message,
+                'error_code': 'VALIDATION_ERROR'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except PermissionDenied as exc:
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': str(exc),
+                'error_code': 'PERMISSION_DENIED'
+            }, status=status.HTTP_403_FORBIDDEN)
+            
+        except Exception as exc:
+            logger.error(f"Unexpected error during transfer: {exc}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'An unexpected error occurred. Please try again.',
+                'error_code': 'INTERNAL_ERROR'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

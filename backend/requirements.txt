@@ -18,6 +18,9 @@ python-decouple==3.8
 # Plaid Integration
 plaid-python==9.9.0
 
+# Stripe Integration
+stripe>=10.0.0
+
 # Security
 cryptography==41.0.7
 

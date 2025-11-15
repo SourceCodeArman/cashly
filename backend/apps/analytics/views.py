@@ -22,12 +22,22 @@ class DashboardView(APIView):
     GET /api/v1/dashboard/
     Get dashboard data including account balances, recent transactions,
     monthly spending summary, goal progress, and category chart data.
+    
+    Note: Advanced analytics features (if added) should check FEATURE_ADVANCED_ANALYTICS.
+    Export features (CSV/PDF) should check FEATURE_EXPORT permission.
     """
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
         """Get dashboard data."""
         user = request.user
+        
+        # Note: Basic dashboard is available to all tiers
+        # Advanced analytics features (if added) should check subscription:
+        # from apps.subscriptions.limit_service import SubscriptionLimitService
+        # from apps.subscriptions.exceptions import FeatureNotAvailable
+        # from apps.subscriptions.limits import FEATURE_ADVANCED_ANALYTICS
+        # SubscriptionLimitService.enforce_limit(user, FEATURE_ADVANCED_ANALYTICS)
         
         # Get current month and year
         now = timezone.now()

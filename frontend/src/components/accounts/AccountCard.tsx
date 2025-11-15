@@ -13,6 +13,7 @@ export interface AccountCardProps {
   onSync?: () => Promise<void> | void
   onDelete?: () => void
   onUpdate?: (accountId: string, updates: { custom_name?: string | null }) => Promise<void>
+  onClick?: () => void
   isSyncing?: boolean
   isUpdating?: boolean
 }
@@ -22,6 +23,7 @@ export default function AccountCard({
   onSync,
   onDelete,
   onUpdate,
+  onClick,
   isSyncing,
   isUpdating,
 }: AccountCardProps) {
@@ -104,9 +106,26 @@ export default function AccountCard({
     }
   }
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't trigger card click if clicking on buttons or interactive elements
+    const target = e.target as HTMLElement
+    if (
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('[role="button"]')
+    ) {
+      return
+    }
+    onClick?.()
+  }
+
   return (
-    <Card>
-      <div className="flex items-start justify-between mb-4">
+    <Card className="h-full flex flex-col">
+      <div className="h-full flex flex-col">
+        <div
+          className={`flex items-start justify-between mb-4 flex-1 ${onClick ? 'cursor-pointer' : ''}`}
+          onClick={handleCardClick}
+        >
         <div className="flex-1 min-w-0">
           {isEditingName ? (
             <div className="flex items-center gap-2">
@@ -152,7 +171,10 @@ export default function AccountCard({
               </h3>
               {onUpdate && (
                 <button
-                  onClick={handleStartEdit}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleStartEdit()
+                }}
                   className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-gray-600 transition-opacity"
                   title="Edit name"
                 >
@@ -176,32 +198,34 @@ export default function AccountCard({
             {formatCurrency(parseFloat(account.balance), account.currency)}
           </p>
         </div>
-      </div>
+        </div>
+        <div className="mt-auto">
+          <p className="text-xs text-gray-500 mb-4">
+            {account.last_synced_at
+              ? `Last synced ${formatRelativeTime(account.last_synced_at)}`
+              : 'Never synced'}
+          </p>
 
-      {account.last_synced_at && (
-        <p className="text-xs text-gray-500 mb-4">
-          Last synced {formatRelativeTime(account.last_synced_at)}
-        </p>
-      )}
-
-      <div className="flex gap-2">
-        {onSync && (
-          <Button
-            variant={recentlySynced ? "success" : "primary"}
-            size="sm"
-            onClick={handleSync}
-            isLoading={isSyncing && !recentlySynced}
-            disabled={isSyncing}
-            fullWidth
-          >
-            {recentlySynced ? 'Synced!' : 'Sync'}
-          </Button>
-        )}
-        {onDelete && (
-          <Button variant="danger" size="sm" onClick={onDelete} fullWidth>
-            Disconnect
-          </Button>
-        )}
+          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+            {onSync && (
+              <Button
+                variant={recentlySynced ? "success" : "primary"}
+                size="sm"
+                onClick={handleSync}
+                isLoading={isSyncing && !recentlySynced}
+                disabled={isSyncing}
+                fullWidth
+              >
+                {recentlySynced ? 'Synced!' : 'Sync'}
+              </Button>
+            )}
+            {onDelete && (
+              <Button variant="danger" size="sm" onClick={onDelete} fullWidth>
+                Disconnect
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
     </Card>
   )

@@ -180,46 +180,33 @@ def process_contribution_rules(goal: Goal, date_range: Optional[Tuple] = None) -
             if contribution_amount > 0:
                 # Execute transfer if destination is account (not cash)
                 if goal.destination_account:
-                    # Get stored authorization for this goal
+                    # Use transfer service to execute transfer
+                    # This performs all security checks including transfer_authorized verification
                     try:
-                        from .models import TransferAuthorization
-                        from apps.accounts.plaid_utils import create_transfer, decrypt_token, PlaidIntegrationError
+                        from apps.accounts.transfer_service import execute_transfer
                         
-                        # Get the most recent active authorization
-                        transfer_auth = TransferAuthorization.objects.filter(
-                            goal=goal,
-                            status='active'
-                        ).order_by('-authorized_at').first()
+                        transfer_result = execute_transfer(
+                            goal_id=str(goal.goal_id),
+                            source_account_id=account_id,
+                            destination_account_id=str(goal.destination_account.account_id),
+                            amount=contribution_amount,
+                            user=goal.user,
+                            description=f"Goal: {goal.name[:4]}"  # Max 10 chars total (4 chars from name + "Goal: " = 6 chars prefix)
+                        )
                         
-                        if not transfer_auth or not transfer_auth.plaid_authorization_id:
-                            logger.warning(f"No active authorization found for goal {goal.goal_id}")
-                            continue
-                        
-                        # Decrypt authorization ID if needed (it's stored as plaid_authorization_id)
-                        authorization_id = transfer_auth.plaid_authorization_id
-                        
-                        # Create the actual transfer using stored authorization
-                        try:
-                            transfer_result = create_transfer(
-                                user=goal.user,
-                                source_account_id=account_id,
-                                destination_account_id=str(goal.destination_account.account_id),
-                                amount=str(contribution_amount),
-                                authorization_id=authorization_id,
-                                description=f"Goal: {goal.name[:15]}"  # Max 15 chars
-                            )
-                            
-                            logger.info(f"Created transfer {transfer_result['transfer_id']} for goal {goal.goal_id}")
-                            
-                        except PlaidIntegrationError as e:
-                            logger.error(f"Failed to create transfer for goal {goal.goal_id}: {e}")
-                            # Continue to create contribution record even if transfer fails
-                            # The contribution record tracks the intent
-                            pass
+                        logger.info(
+                            f"Transfer executed successfully: {transfer_result.get('transfer_id')} "
+                            f"for goal {goal.goal_id}"
+                        )
                         
                     except Exception as e:
-                        logger.error(f"Error creating transfer for goal {goal.goal_id}: {e}")
-                        # Continue to create contribution record
+                        # Log error but continue to create contribution record
+                        # The contribution record tracks the intent even if transfer fails
+                        logger.error(
+                            f"Failed to execute transfer for goal {goal.goal_id}: {e}",
+                            exc_info=True
+                        )
+                        # Continue to create contribution record (tracks intent)
                         pass
                 
                 # Create contribution record

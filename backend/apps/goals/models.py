@@ -220,6 +220,32 @@ class Goal(models.Model):
         if self.destination_account and not self.transfer_authorized:
             return True
         return False
+    
+    def can_execute_transfers(self):
+        """
+        Check if goal can execute transfers.
+        
+        Returns True only if ALL conditions are met:
+        - Goal is active
+        - Transfer is authorized
+        - Destination account exists
+        - Active authorization exists
+        """
+        if not self.is_active:
+            return False
+        
+        if not self.transfer_authorized:
+            return False
+        
+        if not self.destination_account:
+            return False
+        
+        # Check for active authorization
+        has_active_auth = self.transfer_authorizations.filter(
+            status='active'
+        ).exists()
+        
+        return has_active_auth
 
 
 class Contribution(models.Model):
@@ -304,6 +330,19 @@ class TransferAuthorization(models.Model):
         null=True,
         db_index=True,
         help_text="Plaid authorization identifier"
+    )
+    authorized_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Amount authorized for this authorization (must match transfer amount)"
+    )
+    authorized_account_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Plaid account ID that was authorized (must match transfer account)"
     )
     authorized_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(null=True, blank=True, help_text="When authorization expires")

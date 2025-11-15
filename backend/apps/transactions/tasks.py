@@ -50,6 +50,14 @@ def _sync_account_transactions_impl(account_id):
     # print(f"Plaid transactions: {plaid_transactions}")
     # logger.info(f"Fetched {len(plaid_transactions)} transactions from Plaid")
     
+    # Update account sync timestamp even if no transactions
+    # This ensures the frontend knows the sync completed
+    account.last_synced_at = timezone.now()
+    account.error_code = None
+    account.error_message = None
+    account.last_error_at = None
+    account.save(update_fields=['last_synced_at', 'error_code', 'error_message', 'last_error_at'])
+    
     if not plaid_transactions:
         logger.info(f"No transactions to sync for account {account_id}")
         return {
@@ -404,10 +412,36 @@ def sync_account_transactions(self, account_id):
         logger.error(f"Plaid error syncing account {account_id}: {str(exc)}")
         account = Account.objects.filter(account_id=account_id).first()
         if account:
-            account.error_code = getattr(exc, 'code', 'PLAID_ERROR')
+            error_code = getattr(exc, 'code', 'PLAID_ERROR')
+            account.error_code = error_code
             account.error_message = str(exc)
             account.last_error_at = timezone.now()
-            account.save(update_fields=['error_code', 'error_message', 'last_error_at'])
+            
+            # If the Plaid item was not found (removed or access revoked), deactivate the account
+            if error_code == 'ITEM_NOT_FOUND':
+                logger.warning(
+                    f"Plaid item not found for account {account_id}. "
+                    "This usually means the item was removed or access was revoked. Deactivating account."
+                )
+                account.is_active = False
+                account.error_message = (
+                    "This account connection is no longer valid. "
+                    "The bank account was disconnected or access was revoked. "
+                    "Please reconnect the account to continue syncing."
+                )
+                account.save(update_fields=['error_code', 'error_message', 'last_error_at', 'is_active'])
+                # Return gracefully instead of raising - the account is handled
+                return {
+                    'account_id': str(account_id),
+                    'created': 0,
+                    'updated': 0,
+                    'errors': 1,
+                    'total_processed': 0,
+                    'error': 'ITEM_NOT_FOUND',
+                    'message': 'Account deactivated due to invalid Plaid connection'
+                }
+            
+            account.save(update_fields=['error_code', 'error_message', 'last_error_at', 'is_active'])
         # Don't retry Plaid errors - they're usually permanent
         raise
     except Exception as e:

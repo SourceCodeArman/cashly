@@ -1,6 +1,7 @@
 """
 Views for goals app.
 """
+import logging
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -10,6 +11,7 @@ from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIV
 from django.utils import timezone
 from decimal import Decimal
 from django.shortcuts import get_object_or_404
+from django.db.models import Q
 
 from .models import Goal, Contribution
 from .serializers import (
@@ -24,6 +26,8 @@ from .services import sync_destination_account_balance
 from apps.api.permissions import IsOwnerOrReadOnly
 from apps.accounts.plaid_service import PlaidService
 from apps.accounts.plaid_utils import PlaidIntegrationError
+
+logger = logging.getLogger(__name__)
 
 
 class ContributionListCreateView(ListCreateAPIView):
@@ -41,7 +45,8 @@ class ContributionListCreateView(ListCreateAPIView):
         if not goal_id:
             return Contribution.objects.none()
         goal = get_object_or_404(Goal, goal_id=goal_id, user=self.request.user)
-        return Contribution.objects.filter(goal=goal, user=self.request.user)
+        # Order by date descending (newest first), then by created_at for consistent pagination
+        return Contribution.objects.filter(goal=goal, user=self.request.user).order_by('-date', '-created_at')
     
     def get_serializer_class(self):
         """Return appropriate serializer based on request method."""
@@ -194,7 +199,7 @@ class GoalViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
     
     def get_queryset(self):
-        """Return goals for the current user."""
+        """Return goals for the current user from active accounts only."""
         queryset = Goal.objects.filter(user=self.request.user)
         
         # For archive/unarchive actions, include all goals (including archived)
@@ -211,6 +216,11 @@ class GoalViewSet(viewsets.ModelViewSet):
             else:
                 # Default to active goals only (not archived)
                 queryset = queryset.filter(archived_at__isnull=True)
+            
+            # Filter to only show goals with active destination accounts (or no destination account)
+            queryset = queryset.filter(
+                Q(destination_account__isnull=True) | Q(destination_account__is_active=True)
+            )
         
         # Filter by is_completed if specified (but not for archive/unarchive actions)
         if self.action not in ['archive', 'unarchive']:
@@ -219,7 +229,8 @@ class GoalViewSet(viewsets.ModelViewSet):
                 is_completed_bool = is_completed.lower() == 'true'
                 queryset = queryset.filter(is_completed=is_completed_bool)
         
-        return queryset
+        # Order by created_at descending (newest first), then by name for consistent pagination
+        return queryset.order_by('-created_at', 'name')
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action."""
@@ -229,8 +240,58 @@ class GoalViewSet(viewsets.ModelViewSet):
     
     def create(self, request, *args, **kwargs):
         """Create goal and return full GoalSerializer response."""
+        # Check subscription limit before creating goal
+        try:
+            from apps.subscriptions.limit_service import SubscriptionLimitService
+            from apps.subscriptions.exceptions import (
+                SubscriptionLimitExceeded,
+                SubscriptionExpired,
+            )
+            from apps.subscriptions.limits import FEATURE_GOALS
+            
+            # Count non-archived goals
+            current_count = Goal.objects.filter(
+                user=request.user,
+                archived_at__isnull=True
+            ).count()
+            
+            SubscriptionLimitService.enforce_limit(
+                user=request.user,
+                feature_type=FEATURE_GOALS,
+                current_count=current_count
+            )
+        except SubscriptionLimitExceeded as e:
+            logger.info(f"Goal limit exceeded for user {request.user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except SubscriptionExpired as e:
+            logger.info(f"Subscription expired for user {request.user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except Exception as e:
+            logger.error(f"Error checking goal limit: {e}", exc_info=True)
+            # Don't block goal creation if limit check fails
+        
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        
+        # Check transfer authorization feature access if goal has destination account
+        destination_account_id = serializer.validated_data.get('destination_account')
+        if destination_account_id:
+            try:
+                from apps.subscriptions.limit_service import SubscriptionLimitService
+                from apps.subscriptions.exceptions import FeatureNotAvailable
+                from apps.subscriptions.limits import FEATURE_TRANSFER_AUTHORIZATION
+                
+                SubscriptionLimitService.enforce_limit(
+                    user=request.user,
+                    feature_type=FEATURE_TRANSFER_AUTHORIZATION
+                )
+            except FeatureNotAvailable as e:
+                logger.info(f"Transfer authorization feature not available for user {request.user.id}: {e}")
+                return Response(e.to_dict(), status=e.status_code)
+            except Exception as e:
+                logger.error(f"Error checking transfer authorization access: {e}", exc_info=True)
+                # Don't block goal creation if feature check fails
+        
         self.perform_create(serializer)
         
         # Use GoalSerializer for response to include all computed fields
@@ -501,6 +562,28 @@ class GoalViewSet(viewsets.ModelViewSet):
         """
         goal = self.get_object()
         
+        # Check transfer authorization feature access
+        try:
+            from apps.subscriptions.limit_service import SubscriptionLimitService
+            from apps.subscriptions.exceptions import FeatureNotAvailable
+            from apps.subscriptions.limits import FEATURE_TRANSFER_AUTHORIZATION
+            
+            SubscriptionLimitService.enforce_limit(
+                user=request.user,
+                feature_type=FEATURE_TRANSFER_AUTHORIZATION
+            )
+        except FeatureNotAvailable as e:
+            logger.info(f"Transfer authorization feature not available for user {request.user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except Exception as e:
+            logger.error(f"Error checking transfer authorization access: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'An error occurred while checking subscription limits',
+                'error_code': 'SUBSCRIPTION_CHECK_ERROR'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
         if not goal.destination_account:
             return Response({
                 'status': 'error',
@@ -561,11 +644,17 @@ class GoalViewSet(viewsets.ModelViewSet):
                 goal_id=str(goal.goal_id)
             )
             
+            # Get source account to store authorized account ID
+            from apps.accounts.models import Account
+            source_account = Account.objects.get(account_id=source_account_id, user=request.user)
+            
             # Store the authorization for future use
             transfer_auth = TransferAuthorization.objects.create(
                 goal=goal,
                 authorization_token=encrypt_token(auth_result['authorization_id']),  # Store encrypted authorization ID
                 plaid_authorization_id=auth_result['authorization_id'],
+                authorized_amount=Decimal(transfer_amount),  # Store authorized amount
+                authorized_account_id=source_account.plaid_account_id,  # Store authorized account ID
                 status='active'
             )
             
@@ -618,6 +707,28 @@ class GoalViewSet(viewsets.ModelViewSet):
         Complete transfer authorization after user approves in Plaid Link.
         """
         goal = self.get_object()
+        
+        # Check transfer authorization feature access
+        try:
+            from apps.subscriptions.limit_service import SubscriptionLimitService
+            from apps.subscriptions.exceptions import FeatureNotAvailable
+            from apps.subscriptions.limits import FEATURE_TRANSFER_AUTHORIZATION
+            
+            SubscriptionLimitService.enforce_limit(
+                user=request.user,
+                feature_type=FEATURE_TRANSFER_AUTHORIZATION
+            )
+        except FeatureNotAvailable as e:
+            logger.info(f"Transfer authorization feature not available for user {request.user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except Exception as e:
+            logger.error(f"Error checking transfer authorization access: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'An error occurred while checking subscription limits',
+                'error_code': 'SUBSCRIPTION_CHECK_ERROR'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         public_token = request.data.get('public_token')
         metadata = request.data.get('metadata', {})

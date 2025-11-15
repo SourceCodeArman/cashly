@@ -41,17 +41,64 @@ class TransactionViewSet(viewsets.ModelViewSet):
     ordering = ['-date', '-created_at']
     
     def get_queryset(self):
-        """Return transactions for the current user."""
-        queryset = Transaction.objects.for_user(self.request.user)
+        """Return transactions for the current user from active accounts only."""
+        # Use select_related to optimize database queries (avoid N+1 problem)
+        # This fetches account and category in a single query using JOINs
+        # Filter to only include transactions from active accounts
+        queryset = Transaction.objects.for_user(self.request.user).filter(
+            account__is_active=True
+        ).select_related(
+            'account',  # Fetch account data (account_name, account_number, account_type)
+            'category'  # Fetch category data (category_name, category_id)
+        )
         
-        # Additional filtering by date range
+        # Enforce subscription transaction history date range limit
+        try:
+            from apps.subscriptions.limit_service import SubscriptionLimitService
+            from apps.subscriptions.exceptions import SubscriptionExpired
+            
+            history_limit = SubscriptionLimitService.get_transaction_history_limit(self.request.user)
+            
+            if history_limit is not None:
+                # Calculate minimum date based on subscription limit
+                from datetime import timedelta
+                min_date = timezone.now().date() - history_limit
+                
+                # If user provided date_from, use the later of the two dates
+                date_from_param = self.request.query_params.get('date_from', None)
+                if date_from_param:
+                    try:
+                        param_date = datetime.strptime(date_from_param, '%Y-%m-%d').date()
+                        min_date = max(min_date, param_date)
+                    except ValueError:
+                        pass  # Invalid date format, use calculated min_date
+                
+                queryset = queryset.filter(date__gte=min_date)
+        except SubscriptionExpired:
+            # If subscription expired, use free tier limit (30 days)
+            from datetime import timedelta
+            min_date = timezone.now().date() - timedelta(days=30)
+            queryset = queryset.filter(date__gte=min_date)
+        except Exception as e:
+            logger.warning(f"Error enforcing transaction history limit: {e}", exc_info=True)
+            # Don't block queries if limit check fails, but log it
+        
+        # Additional filtering by date range (user-specified)
         date_from = self.request.query_params.get('date_from', None)
         date_to = self.request.query_params.get('date_to', None)
         
         if date_from:
-            queryset = queryset.filter(date__gte=date_from)
+            try:
+                date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+                queryset = queryset.filter(date__gte=date_from_obj)
+            except ValueError:
+                pass  # Invalid date format, skip
         if date_to:
-            queryset = queryset.filter(date__lte=date_to)
+            try:
+                date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+                queryset = queryset.filter(date__lte=date_to_obj)
+            except ValueError:
+                pass  # Invalid date format, skip
         
         # Filter by amount range
         amount_min = self.request.query_params.get('amount_min', None)
@@ -81,7 +128,14 @@ class TransactionViewSet(viewsets.ModelViewSet):
             getattr(settings, 'AI_AUTO_CATEGORIZE_ON_SYNC', True) and
             not transaction.category):
             try:
-                suggested_category = auto_categorize_transaction(transaction)
+                # Check AI categorization feature access before auto-categorizing
+                from apps.subscriptions.limit_service import SubscriptionLimitService
+                from apps.subscriptions.limits import FEATURE_AI_CATEGORIZATION
+                
+                suggested_category = None
+                if SubscriptionLimitService.can_access_feature(self.request.user, FEATURE_AI_CATEGORIZATION):
+                    suggested_category = auto_categorize_transaction(transaction)
+                
                 if suggested_category:
                     apply_category_to_transaction(transaction, suggested_category, user_modified=False)
                     logger.info(
@@ -167,6 +221,28 @@ class TransactionViewSet(viewsets.ModelViewSet):
         """
         transaction = self.get_object()
         
+        # Check AI categorization feature access
+        try:
+            from apps.subscriptions.limit_service import SubscriptionLimitService
+            from apps.subscriptions.exceptions import FeatureNotAvailable
+            from apps.subscriptions.limits import FEATURE_AI_CATEGORIZATION
+            
+            SubscriptionLimitService.enforce_limit(
+                user=request.user,
+                feature_type=FEATURE_AI_CATEGORIZATION
+            )
+        except FeatureNotAvailable as e:
+            logger.info(f"AI categorization feature not available for user {request.user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except Exception as e:
+            logger.error(f"Error checking AI categorization access: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'An error occurred while checking subscription limits',
+                'error_code': 'SUBSCRIPTION_CHECK_ERROR'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
         # Get suggestions
         suggestions = get_category_suggestions(transaction, limit=1)
         
@@ -229,6 +305,28 @@ class TransactionViewSet(viewsets.ModelViewSet):
             "transaction_ids": ["uuid1", "uuid2", ...]
         }
         """
+        # Check AI categorization feature access
+        try:
+            from apps.subscriptions.limit_service import SubscriptionLimitService
+            from apps.subscriptions.exceptions import FeatureNotAvailable
+            from apps.subscriptions.limits import FEATURE_AI_CATEGORIZATION
+            
+            SubscriptionLimitService.enforce_limit(
+                user=request.user,
+                feature_type=FEATURE_AI_CATEGORIZATION
+            )
+        except FeatureNotAvailable as e:
+            logger.info(f"AI categorization feature not available for user {request.user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except Exception as e:
+            logger.error(f"Error checking AI categorization access: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'An error occurred while checking subscription limits',
+                'error_code': 'SUBSCRIPTION_CHECK_ERROR'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
         transaction_ids = request.data.get('transaction_ids', [])
         
         if not transaction_ids:

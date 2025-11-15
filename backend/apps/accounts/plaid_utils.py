@@ -45,6 +45,11 @@ DEFAULT_LANGUAGE = getattr(settings, "PLAID_LANGUAGE", "en")
 
 class PlaidIntegrationError(ValidationError):
     """Custom validation error for Plaid operations."""
+    
+    def __init__(self, message, error_code=None, error_type=None):
+        super().__init__(message)
+        self.code = error_code
+        self.error_type = error_type
 
 
 # Module-level cache for generated encryption key (for development)
@@ -529,7 +534,7 @@ def create_transfer(
         destination_account_id: UUID of destination Account model instance
         amount: Transfer amount as string (e.g., '10.00')
         authorization_id: Plaid authorization ID from stored TransferAuthorization
-        description: Transfer description (max 15 characters)
+        description: Transfer description (max 10 characters - Plaid API limit)
         
     Returns:
         dict: Transfer response with 'transfer_id' and other details
@@ -552,35 +557,141 @@ def create_transfer(
         # Create transfer using stored authorization
         try:
             from plaid.model.transfer_create_request import TransferCreateRequest
+            from plaid.model.transfer_user_in_request import TransferUserInRequest
             from plaid.model.transfer_network import TransferNetwork
             from plaid.model.transfer_type import TransferType
             from plaid.model.ach_class import ACHClass
             
-            # Create transfer request using the authorization_id
-            transfer_request = TransferCreateRequest(
-                idempotency_key=str(uuid.uuid4()),  # Unique key to prevent duplicate transfers
-                access_token=source_access_token,
-                account_id=source_account.plaid_account_id,
-                authorization_id=authorization_id,  # Use stored authorization
-                type=TransferType('debit'),  # Money going out of source account
-                network=TransferNetwork('ach'),
-                amount=amount,
-                ach_class=ACHClass('ppd'),  # Prearranged Payment and Deposit
-                description=description[:15],  # Max 15 characters
-                # Note: origination_account_id would be needed for platform payments
-                # For same-user transfers, we use the authorization_id
+            # When using authorization_id, Plaid API only accepts these fields:
+            # - access_token, account_id, authorization_id, amount, description
+            # However, the SDK requires type, network, ach_class, user for object construction
+            # We'll use a workaround: construct with all fields, convert to dict, remove unwanted fields,
+            # then use the ApiClient's call_api method directly
+            
+            # Create user object (required by SDK for construction)
+            transfer_user = TransferUserInRequest(
+                legal_name=f"{user.first_name} {user.last_name}".strip() or user.email or "User",
+                email_address=user.email
             )
             
-            transfer_response = client.transfer_create(transfer_request)
-            transfer = transfer_response['transfer']
+            # Create request with all fields (SDK requires them for construction)
+            transfer_request = TransferCreateRequest(
+                access_token=source_access_token,
+                account_id=source_account.plaid_account_id,
+                authorization_id=authorization_id,
+                type=TransferType('debit'),
+                network=TransferNetwork('ach'),
+                amount=amount,
+                ach_class=ACHClass('ppd'),
+                description=description[:10],  # Max 10 characters (Plaid API limit)
+                user=transfer_user,
+            )
             
-            logger.info(f"Created transfer {transfer['id']} for ${amount} from {source_account_id} to {destination_account_id}")
+            # Convert to dict and remove fields that API rejects when using authorization_id
+            request_dict = transfer_request.to_dict()
+            fields_to_remove = ['type', 'network', 'ach_class', 'user']
+            for field in fields_to_remove:
+                request_dict.pop(field, None)
+            
+            # Use requests library directly to make a raw HTTP call
+            # This bypasses SDK validation issues with authorization_id
+            import json
+            import requests
+            from plaid import Environment as PlaidEnvironment
+            
+            api_client = client.api_client
+            
+            # Get the base URL from the ApiClient configuration
+            host = api_client.configuration.host
+            if isinstance(host, PlaidEnvironment):
+                # Plaid Environment enum - map to actual URLs
+                env_to_url = {
+                    PlaidEnvironment.Sandbox: 'https://sandbox.plaid.com',
+                    PlaidEnvironment.Development: 'https://development.plaid.com',
+                    PlaidEnvironment.Production: 'https://production.plaid.com',
+                }
+                base_url = env_to_url.get(host, 'https://sandbox.plaid.com')
+            else:
+                # Fallback to string value
+                base_url = str(host) if not str(host).startswith('http') else str(host)
+                if not base_url.startswith('http'):
+                    base_url = f"https://{base_url}"
+            
+            # Prepare headers
+            headers = {
+                'Content-Type': 'application/json',
+                'PLAID-CLIENT-ID': settings.PLAID_CLIENT_ID,
+                'PLAID-SECRET': settings.PLAID_SECRET,
+                'Plaid-Version': '2020-09-14',
+            }
+            
+            # Make the HTTP request directly
+            url = f"{base_url}/transfer/create"
+            response = requests.post(
+                url,
+                headers=headers,
+                json=request_dict,
+                timeout=getattr(settings, 'PLAID_API_TIMEOUT', 30)
+            )
+            
+            # Check for errors
+            if response.status_code != 200:
+                # Parse error response
+                try:
+                    error_body = response.json() if response.text else {}
+                except (ValueError, json.JSONDecodeError):
+                    # If response is not JSON, use the raw text
+                    error_body = {'error_message': response.text or 'Unknown error'}
+                
+                # Extract error information (Plaid API structure)
+                error_message = error_body.get('error_message', 'Unknown error')
+                error_type = error_body.get('error_type', 'API_ERROR')
+                error_code = error_body.get('error_code', 'UNKNOWN')
+                
+                # Some Plaid errors have nested error structure
+                error_details = error_body.get('error', {})
+                if isinstance(error_details, dict):
+                    error_message = error_details.get('message', error_details.get('error_message', error_message))
+                    error_type = error_details.get('type', error_details.get('error_type', error_type))
+                    error_code = error_details.get('code', error_details.get('error_code', error_code))
+                
+                # Log detailed error
+                logger.error(
+                    f"Plaid API error ({response.status_code}): {error_type} - {error_message} "
+                    f"(Code: {error_code})"
+                )
+                
+                raise PlaidIntegrationError(
+                    f"Failed to create transfer: {error_message} (Code: {error_code})"
+                )
+            
+            # Parse successful response
+            try:
+                response_data = response.json()
+            except (ValueError, json.JSONDecodeError) as exc:
+                logger.error(f"Failed to parse Plaid transfer response as JSON: {exc}")
+                raise PlaidIntegrationError("Failed to parse transfer response from Plaid API")
+            
+            # Extract transfer from response (response is already a dict from JSON)
+            transfer = response_data.get('transfer', response_data)
+            
+            # Extract transfer fields
+            transfer_id = transfer.get('id')
+            transfer_amount = transfer.get('amount')
+            transfer_status = transfer.get('status')
+            transfer_created = transfer.get('created')
+            
+            if not transfer_id:
+                logger.error(f"Transfer response missing 'id' field: {response_data}")
+                raise PlaidIntegrationError("Transfer response missing required 'id' field")
+            
+            logger.info(f"Created transfer {transfer_id} for ${amount} from {source_account_id} to {destination_account_id}")
             
             return {
-                'transfer_id': transfer['id'],
-                'amount': transfer['amount'],
-                'status': transfer.get('status'),
-                'created': transfer.get('created'),
+                'transfer_id': transfer_id,
+                'amount': transfer_amount,
+                'status': transfer_status,
+                'created': transfer_created,
             }
             
         except ImportError as import_exc:

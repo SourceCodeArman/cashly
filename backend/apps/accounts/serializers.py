@@ -1,6 +1,7 @@
 """
 Serializers for accounts app.
 """
+from decimal import Decimal
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
@@ -90,8 +91,12 @@ class UserSerializer(serializers.ModelSerializer):
     """Serializer for user profile data."""
     class Meta:
         model = User
-        fields = ('id', 'email', 'username', 'first_name', 'last_name', 'phone_number', 
-                  'subscription_tier', 'mfa_enabled', 'preferences', 'created_at', 'updated_at')
+        fields = (
+            'id', 'email', 'username', 'first_name', 'last_name', 'phone_number',
+            'subscription_tier', 'subscription_status', 'subscription_end_date',
+            'stripe_customer_id', 'mfa_enabled', 'preferences', 'tour_done',
+            'created_at', 'updated_at'
+        )
         read_only_fields = ('id', 'created_at', 'updated_at')
 
 
@@ -169,6 +174,14 @@ class AccountSerializer(serializers.ModelSerializer):
         )
 
 
+class AccountWithCountSerializer(AccountSerializer):
+    """Serializer for Account model with transaction count."""
+    transaction_count = serializers.IntegerField(read_only=True)
+    
+    class Meta(AccountSerializer.Meta):
+        fields = AccountSerializer.Meta.fields + ('transaction_count',)
+
+
 class LinkTokenRequestSerializer(serializers.Serializer):
     """Serializer for Plaid Link token creation."""
 
@@ -188,6 +201,12 @@ class AccountConnectionSerializer(serializers.Serializer):
     institution_name = serializers.CharField(required=False, allow_blank=True)
     selected_account_ids = serializers.ListField(
         child=serializers.CharField(), required=False, allow_empty=True
+    )
+    account_custom_names = serializers.DictField(
+        child=serializers.CharField(max_length=200, allow_blank=True),
+        required=False,
+        allow_empty=True,
+        help_text="Mapping of account_id to custom_name"
     )
     webhook = serializers.URLField(required=False, allow_blank=True)
 
@@ -226,4 +245,87 @@ class PlaidAssetSerializer(serializers.Serializer):
 
     asset_report_token = serializers.CharField()
     status = serializers.CharField()
+
+
+class TransferCreateSerializer(serializers.Serializer):
+    """
+    Serializer for creating a transfer between accounts.
+    
+    This serializer validates transfer requests before they are executed.
+    Additional security checks (including transfer_authorized flag verification)
+    are performed in the transfer_service module.
+    """
+    destination_account_id = serializers.UUIDField(required=True)
+    amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=True,
+        min_value=Decimal('0.01')
+    )
+    goal_id = serializers.UUIDField(required=True)
+    description = serializers.CharField(
+        max_length=10,
+        required=False,
+        default="Goal contr"  # Max 10 chars (Plaid API limit)
+    )
+    
+    def validate(self, data):
+        """
+        Validate transfer request.
+        
+        Performs initial validation to ensure:
+        - Goal exists and belongs to user
+        - Destination account exists and belongs to user
+        - Goal has a destination account
+        - Destination account matches goal's destination account
+        
+        Note: Additional security checks (including transfer_authorized flag)
+        are performed in transfer_service.validate_transfer_request().
+        """
+        goal_id = data.get('goal_id')
+        destination_account_id = data.get('destination_account_id')
+        user = self.context['request'].user
+        
+        # Import here to avoid circular dependencies
+        from apps.goals.models import Goal
+        
+        # Validate goal exists and belongs to user
+        try:
+            goal = Goal.objects.get(goal_id=goal_id, user=user)
+        except Goal.DoesNotExist:
+            raise serializers.ValidationError({
+                'goal_id': ['Goal not found or does not belong to user']
+            })
+        
+        # Validate destination account exists and belongs to user
+        try:
+            destination_account = Account.objects.get(
+                account_id=destination_account_id,
+                user=user
+            )
+        except Account.DoesNotExist:
+            raise serializers.ValidationError({
+                'destination_account_id': [
+                    'Destination account not found or does not belong to user'
+                ]
+            })
+        
+        # Validate goal has destination account
+        if not goal.destination_account:
+            raise serializers.ValidationError({
+                'goal_id': ['Goal must have a destination account to execute transfers']
+            })
+        
+        # Validate destination matches goal's destination
+        if goal.destination_account.account_id != destination_account_id:
+            raise serializers.ValidationError({
+                'destination_account_id': [
+                    'Destination account must match goal\'s destination account'
+                ]
+            })
+        
+        # Additional validation will be done in transfer_service
+        # (checking transfer_authorized, active authorization, etc.)
+        
+        return data
 

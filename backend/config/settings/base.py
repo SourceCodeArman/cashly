@@ -37,6 +37,8 @@ INSTALLED_APPS = [
     'apps.budgets',
     'apps.analytics',
     'apps.api',
+    'apps.notifications',
+    'apps.subscriptions',
 ]
 
 MIDDLEWARE = [
@@ -282,6 +284,17 @@ PLAID_WEBHOOK_ALLOWED_IPS = config(
 )
 PLAID_WEBHOOK_RATE = config('PLAID_WEBHOOK_RATE', default='120/minute')
 PLAID_WEBHOOK_IDEMPOTENCY_TTL = config('PLAID_WEBHOOK_IDEMPOTENCY_TTL', default=300, cast=int)
+
+# Stripe Configuration
+STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
+STRIPE_PUBLISHABLE_KEY = config('STRIPE_PUBLISHABLE_KEY', default='')
+STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET', default='')
+STRIPE_API_VERSION = config('STRIPE_API_VERSION', default='2024-12-18.acacia')
+# Stripe Price IDs (set after running create_stripe_products command)
+STRIPE_PREMIUM_MONTHLY_PRICE_ID = config('STRIPE_PREMIUM_MONTHLY_PRICE_ID', default='')
+STRIPE_PREMIUM_ANNUAL_PRICE_ID = config('STRIPE_PREMIUM_ANNUAL_PRICE_ID', default='')
+STRIPE_PRO_MONTHLY_PRICE_ID = config('STRIPE_PRO_MONTHLY_PRICE_ID', default='')
+STRIPE_PRO_ANNUAL_PRICE_ID = config('STRIPE_PRO_ANNUAL_PRICE_ID', default='')
 
 # AI Categorization Configuration
 # Enable/disable AI-powered transaction categorization

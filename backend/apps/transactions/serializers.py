@@ -11,13 +11,16 @@ class TransactionListSerializer(serializers.ModelSerializer):
     formatted_amount = serializers.SerializerMethodField()
     category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
     category_id = serializers.UUIDField(source='category.category_id', read_only=True, allow_null=True)
+    account = serializers.UUIDField(source='account.account_id', read_only=True)
     account_name = serializers.CharField(source='account.institution_name', read_only=True)
+    account_number = serializers.CharField(source='account.account_number_masked', read_only=True)
+    account_type = serializers.CharField(source='account.account_type', read_only=True)
     
     class Meta:
         model = Transaction
         fields = (
             'transaction_id', 'merchant_name', 'amount', 'formatted_amount',
-            'date', 'category', 'category_id', 'category_name', 'account_name', 'created_at'
+            'date', 'category', 'category_id', 'category_name', 'account', 'account_name', 'account_number', 'account_type', 'created_at'
         )
     
     def get_formatted_amount(self, obj):
@@ -31,6 +34,8 @@ class TransactionDetailSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
     category_id = serializers.UUIDField(source='category.category_id', read_only=True, allow_null=True)
     account_name = serializers.CharField(source='account.institution_name', read_only=True)
+    account_number = serializers.CharField(source='account.account_number_masked', read_only=True)
+    account_type = serializers.CharField(source='account.account_type', read_only=True)
     
     class Meta:
         model = Transaction
@@ -38,7 +43,7 @@ class TransactionDetailSerializer(serializers.ModelSerializer):
             'transaction_id', 'account', 'user', 'amount', 'formatted_amount',
             'date', 'merchant_name', 'description', 'category', 'category_id', 'category_name',
             'subcategory', 'tags', 'notes', 'is_recurring', 'is_transfer',
-            'plaid_transaction_id', 'location', 'account_name', 'created_at',
+            'plaid_transaction_id', 'location', 'account_name', 'account_number', 'account_type', 'created_at',
             'updated_at', 'user_modified'
         )
         read_only_fields = ('transaction_id', 'user', 'created_at', 'updated_at', 'plaid_transaction_id')
