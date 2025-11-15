@@ -71,3 +71,6 @@ htmlcov/
 
 # Docker
 .dockerignore
+
+# Documentation and Planning Files
+cashly-todo.md
