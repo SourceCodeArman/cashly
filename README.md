@@ -1,24 +1,31 @@
 # Cashly
 
-A personal finance management application built with Django and React, featuring automated transaction tracking, intelligent categorization, and goal-oriented savings.
+A personal finance management application built with Django and React, featuring automated transaction tracking, intelligent categorization, goal-oriented savings, subscription management, and real-time notifications.
 
 ## Features
 
 - **Bank Account Integration**: Connect bank accounts via Plaid for automatic transaction import
 - **Transaction Management**: View, filter, search, and categorize transactions
 - **Smart Categorization**: Automatic and manual transaction categorization
-- **Savings Goals**: Create and track savings goals with progress visualization
+- **Savings Goals**: Create and track savings goals with progress visualization and automatic contributions
 - **Dashboard**: Comprehensive financial overview with spending analytics
 - **Secure Authentication**: JWT-based authentication with password reset
+- **Subscriptions**: Stripe-powered subscription management (free, premium, pro tiers)
+- **Notifications**: In-app notification system for alerts and updates
+- **Account Transfers**: Transfer funds between connected accounts
+- **Settings**: User profile and subscription management
 
 ## Tech Stack
 
 - **Backend**: Django 5.0, Django REST Framework
 - **Database**: PostgreSQL
 - **Task Queue**: Celery with Redis
-- **API Integration**: Plaid for bank account connectivity
+- **API Integration**: 
+  - Plaid for bank account connectivity
+  - Stripe for subscription and payment processing
 - **Authentication**: JWT (djangorestframework-simplejwt)
 - **Documentation**: Swagger/OpenAPI (drf-yasg)
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, React Query, Zustand
 
 ## Setup
 
@@ -84,6 +91,52 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
+### Frontend Setup
+
+1. Navigate to frontend directory:
+```bash
+cd frontend
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. Set up environment variables:
+Create a `.env` file in the `frontend/` directory:
+```env
+VITE_API_BASE_URL=http://localhost:8000/api/v1
+VITE_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
+```
+
+4. Run development server:
+```bash
+npm run dev
+```
+
+The frontend will be available at `http://localhost:5173` (or the port Vite assigns).
+
+### Stripe Setup
+
+1. Create a Stripe account at [https://stripe.com](https://stripe.com)
+2. Get your API keys from the Stripe Dashboard → Developers → API keys
+3. Create products and prices in Stripe Dashboard:
+   - Premium Monthly
+   - Premium Annual
+   - Pro Monthly
+   - Pro Annual
+4. Copy the Price IDs and add them to your `backend/.env` file
+5. Set up webhooks in Stripe Dashboard:
+   - Endpoint URL: `https://your-domain.com/api/v1/subscriptions/webhook/`
+   - Events to listen: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded`, `invoice.payment_failed`
+6. Copy the webhook signing secret to your `backend/.env` file as `STRIPE_WEBHOOK_SECRET`
+7. Run the management command to sync products:
+```bash
+cd backend
+python manage.py create_stripe_products
+```
+
 ### Docker Setup
 
 ```bash
@@ -139,6 +192,15 @@ Key environment variables for `backend/.env`:
 - `PLAID_WEBHOOK_ALLOWED_IPS`: Comma-separated list of IP addresses allowed to post Plaid webhooks
 - `PLAID_WEBHOOK_IDEMPOTENCY_TTL`: Seconds to cache webhook fingerprints to prevent duplicate processing
 
+**Stripe Integration:**
+- `STRIPE_SECRET_KEY`: Stripe secret key (get from https://dashboard.stripe.com/apikeys)
+- `STRIPE_PUBLISHABLE_KEY`: Stripe publishable key (for frontend)
+- `STRIPE_WEBHOOK_SECRET`: Webhook signing secret for Stripe webhook verification
+- `STRIPE_PRICE_ID_PREMIUM_MONTHLY`: Stripe price ID for premium monthly plan
+- `STRIPE_PRICE_ID_PREMIUM_ANNUAL`: Stripe price ID for premium annual plan
+- `STRIPE_PRICE_ID_PRO_MONTHLY`: Stripe price ID for pro monthly plan
+- `STRIPE_PRICE_ID_PRO_ANNUAL`: Stripe price ID for pro annual plan
+
 **Celery/Redis:**
 - `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`: Redis connection URLs for Celery
 
@@ -157,8 +219,10 @@ cashly/
 │   │   ├── accounts/          # User authentication and account management
 │   │   ├── transactions/      # Transaction and category management
 │   │   ├── goals/             # Savings goals
-│   │   ├── budgets/           # Budget management (Phase 2)
+│   │   ├── budgets/           # Budget management
 │   │   ├── analytics/         # Dashboard and analytics
+│   │   ├── subscriptions/     # Stripe subscription management
+│   │   ├── notifications/     # Notification system
 │   │   └── api/               # API utilities (exceptions, permissions, middleware)
 │   ├── config/                # Django project configuration
 │   │   ├── settings/          # Environment-specific settings
@@ -167,6 +231,15 @@ cashly/
 │   ├── requirements.txt       # Python dependencies
 │   ├── Dockerfile             # Docker configuration
 │   └── docker-compose.yml     # Docker Compose configuration
+├── frontend/
+│   ├── src/
+│   │   ├── components/        # React components
+│   │   ├── pages/             # Page components
+│   │   ├── services/          # API service functions
+│   │   ├── hooks/             # Custom React hooks
+│   │   ├── store/             # State management (Zustand)
+│   │   └── types/             # TypeScript type definitions
+│   └── package.json           # Frontend dependencies
 └── README.md                  # Project documentation
 ```
 
@@ -182,7 +255,11 @@ cashly/
 - `POST /api/v1/accounts/create-link-token` - Create Plaid link token
 - `POST /api/v1/accounts/connect` - Connect bank account
 - `GET /api/v1/accounts/` - List user accounts
+- `GET /api/v1/accounts/:id` - Get account details
+- `PATCH /api/v1/accounts/:id` - Update account (e.g., custom name)
 - `POST /api/v1/accounts/:id/sync` - Sync account transactions
+- `POST /api/v1/accounts/:id/disconnect` - Disconnect account
+- `POST /api/v1/accounts/transfer` - Transfer funds between accounts
 
 ### Transactions
 - `GET /api/v1/transactions/transactions/` - List transactions
@@ -197,7 +274,29 @@ cashly/
 ### Goals
 - `GET /api/v1/goals/` - List savings goals
 - `POST /api/v1/goals/` - Create goal
+- `GET /api/v1/goals/:id` - Get goal details
+- `PATCH /api/v1/goals/:id` - Update goal
+- `DELETE /api/v1/goals/:id` - Delete goal
 - `POST /api/v1/goals/:id/contribute` - Record contribution
+- `POST /api/v1/goals/:id/transfer` - Transfer funds to goal
+- `GET /api/v1/goals/:id/forecast` - Get goal forecast
+
+### Subscriptions
+- `GET /api/v1/subscriptions/config` - Get Stripe configuration
+- `GET /api/v1/subscriptions/` - List user subscriptions
+- `POST /api/v1/subscriptions/` - Create subscription
+- `GET /api/v1/subscriptions/:id` - Get subscription details
+- `PATCH /api/v1/subscriptions/:id` - Update subscription
+- `POST /api/v1/subscriptions/:id/cancel` - Cancel subscription
+- `POST /api/v1/subscriptions/webhook` - Stripe webhook endpoint
+
+### Notifications
+- `GET /api/v1/notifications/` - List notifications
+- `GET /api/v1/notifications/unread_count/` - Get unread count
+- `GET /api/v1/notifications/:id` - Get notification details
+- `PATCH /api/v1/notifications/:id/mark_read/` - Mark notification as read
+- `POST /api/v1/notifications/mark_all_read/` - Mark all notifications as read
+- `DELETE /api/v1/notifications/:id` - Delete notification
 
 ## Mobile Integration Notes
 
@@ -205,8 +304,8 @@ cashly/
 - Use the official Plaid Link SDK for iOS/Android. Request a Link token via `POST /api/v1/accounts/create-link-token/` and feed the returned token into the SDK.
 - When Plaid Link succeeds, send the `public_token`, institution metadata, and selected account IDs to `POST /api/v1/accounts/connect/` to finalize the connection.
 - Monitor account metadata for `ITEM_LOGIN_REQUIRED` errors and prompt users to reconnect through Plaid Link when necessary.
-- Webhooks hit `/api/v1/accounts/webhook/`. Mobile clients should react to webhook-driven updates (e.g., refresh account balances when notified).
-- `GET /api/v1/goals/:id/forecast` - Get goal forecast
+- Webhooks hit `/api/v1/accounts/webhook/` and `/api/v1/subscriptions/webhook/`. Mobile clients should react to webhook-driven updates (e.g., refresh account balances or subscription status when notified).
+- For subscriptions, use Stripe's native mobile SDKs (iOS/Android) or Stripe Elements in a web view to collect payment methods.
 
 ### Dashboard
 - `GET /api/v1/dashboard/` - Get dashboard data
