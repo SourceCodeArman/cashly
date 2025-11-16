@@ -117,12 +117,12 @@ export default function PricingModal({ isOpen, onClose }: PricingModalProps) {
             )}
 
             <div className="flex-1">
-              <h3 className="text-2xl font-bold text-gray-900 mb-2">{tier.name}</h3>
+              <h3 className="text-2xl font-bold text-slate-800 mb-2">{tier.name}</h3>
               <p className="text-sm text-gray-600 mb-4">{tier.description}</p>
 
               <div className="mb-6">
                 <div className="flex items-baseline">
-                  <span className="text-4xl font-bold text-gray-900">
+                  <span className="text-4xl font-bold text-slate-800">
                     {tier.price.monthly}
                   </span>
                   <span className="text-gray-600 ml-2">/month</span>

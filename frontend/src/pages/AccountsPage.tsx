@@ -127,7 +127,7 @@ export default function AccountsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Accounts</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Accounts</h1>
           <p className="text-gray-600 mt-1">Manage your connected bank accounts</p>
         </div>
         <div className="flex gap-3">

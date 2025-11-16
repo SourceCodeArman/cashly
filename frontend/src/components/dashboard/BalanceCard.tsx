@@ -29,7 +29,7 @@ export default function BalanceCard({
   const topAccounts = [...accounts].sort((a, b) => b.balance - a.balance).slice(0, 3)
   
   return (
-    <Card className="card-glass bg-gradient-to-br from-primary-500/80 to-primary-600/80 backdrop-blur-md text-white border-white/30">
+    <Card className="card-glass bg-gradient-to-br from-primary-300 to-accent-200 backdrop-blur-md text-slate-800 border-none shadow-md">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-medium opacity-90">Total Balance</h2>
         {trend && trendAmount !== undefined && (

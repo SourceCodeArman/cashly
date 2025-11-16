@@ -104,6 +104,7 @@ export default function AccountFilters({
             placeholder="Search by institution name or account number..."
             value={filters.search}
             onChange={(e) => handleSearchChange(e.target.value)}
+            className="bg-white/30"
             leftIcon={
               <svg
                 className="w-5 h-5"

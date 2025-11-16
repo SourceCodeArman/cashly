@@ -113,7 +113,7 @@ export default function DashboardPage() {
 
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
           <p className="text-gray-600 mt-1">Overview of your finances</p>
         </div>
 
@@ -129,13 +129,13 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card className="card-glass">
               <div className="text-sm text-gray-600">Total Investment</div>
-              <div className="text-2xl font-semibold text-gray-900 mt-1">
+              <div className="text-2xl font-semibold text-slate-800 mt-1">
                 {formatCurrency(dashboardData.account_balance.total_investment)}
               </div>
             </Card>
             <Card className="card-glass">
               <div className="text-sm text-gray-600">Total Debt</div>
-              <div className="text-2xl font-semibold text-gray-900 mt-1">
+              <div className="text-2xl font-semibold text-slate-800 mt-1">
                 {formatCurrency(dashboardData.account_balance.total_debt)}
               </div>
             </Card>

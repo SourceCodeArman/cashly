@@ -99,7 +99,7 @@ function FeatureCard({ feature, index }: FeatureCardProps) {
         ✓
       </div>
       <h3 className={cn(
-        "mt-4 text-lg font-semibold text-gray-900 transition-all duration-500",
+        "mt-4 text-lg font-semibold text-slate-800 transition-all duration-500",
         isVisible ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4"
       )} style={{ transitionDelay: isScrollingUp ? '0ms' : `${index * 80 + 300}ms` }}>
         {feature.title}
@@ -156,7 +156,7 @@ export default function Features() {
               : "opacity-0 translate-y-8"
           )}
         >
-          <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">Everything you need</h2>
+          <h2 className="text-3xl font-bold text-slate-800 sm:text-4xl">Everything you need</h2>
           <p className="mt-3 text-gray-600">
             Cashly brings powerful tools together so you can master your finances without the
             complexity.

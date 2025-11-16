@@ -14,7 +14,7 @@ import type { ApiResponse } from '@/types/api.types'
  * Get Stripe configuration (publishable key)
  */
 export async function getStripeConfig(): Promise<StripeConfigResponse> {
-  const response = await api.get<StripeConfigResponse>('/subscriptions/config/')
+  const response = await api.get<StripeConfigResponse>('/subscriptions/stripe-config/')
   return response.data
 }
 

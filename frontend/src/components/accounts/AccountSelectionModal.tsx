@@ -111,7 +111,7 @@ export default function AccountSelectionModal({
                 key={account.id}
                 className={`border rounded-lg p-4 transition-colors ${
                   isSelected
-                    ? 'border-blue-500 bg-blue-50'
+                    ? 'border-primary-500 bg-primary-50'
                     : 'border-gray-200 bg-white'
                 }`}
               >
@@ -121,7 +121,7 @@ export default function AccountSelectionModal({
                     checked={isSelected}
                     onChange={() => handleToggleAccount(account.id)}
                     disabled={isConnecting}
-                    className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-2">
@@ -150,7 +150,7 @@ export default function AccountSelectionModal({
         </div>
 
         {selectedAccounts.size === 0 && (
-          <p className="text-sm text-red-600">Please select at least one account to connect.</p>
+          <p className="text-sm text-danger-600">Please select at least one account to connect.</p>
         )}
 
         <div className="flex gap-3 justify-end pt-4 border-t">

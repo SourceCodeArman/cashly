@@ -1,18 +1,23 @@
 /**
  * Header component
  */
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Menu, Transition } from '@headlessui/react'
 import { Bars3Icon, BellIcon, UserCircleIcon } from '@heroicons/react/24/outline'
 import { uiStore } from '@/store/uiStore'
 import { useAuth } from '@/hooks/useAuth'
+import { useUnreadCount } from '@/hooks/useNotifications'
 import { formatCurrency } from '@/utils/formatters'
 import { useAccounts } from '@/hooks/useAccounts'
+import NotificationsModal from '@/components/notifications/NotificationsModal'
 
 export default function Header() {
   const { user, logout } = useAuth()
   const { toggleSidebar } = uiStore()
   const { accounts } = useAccounts()
+  const { data: unreadCount = 0 } = useUnreadCount()
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false)
   
   const totalBalance = accounts.reduce((sum, acc) => sum + parseFloat(acc.balance), 0)
 
@@ -24,7 +29,7 @@ export default function Header() {
           <div className="flex items-center gap-4">
             <button
               type="button"
-              className="lg:hidden p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-white/70"
+              className="lg:hidden p-2 rounded-md text-gray-700 hover:text-slate-800 hover:bg-white/70"
               onClick={toggleSidebar}
               aria-label="Toggle sidebar"
             >
@@ -32,13 +37,13 @@ export default function Header() {
             </button>
             
             <Link to="/dashboard" className="flex items-center">
-              <span className="text-2xl font-semibold text-gray-900 hover:opacity-90">Cashly</span>
+              <span className="text-2xl font-semibold text-slate-800 hover:opacity-90">Cashly</span>
             </Link>
           </div>
 
           {/* Center: Balance (Mobile only) */}
           <div className="lg:hidden">
-            <div className="text-sm font-semibold text-gray-900">
+            <div className="text-sm font-semibold text-slate-800">
               {formatCurrency(totalBalance)}
             </div>
           </div>
@@ -48,16 +53,21 @@ export default function Header() {
             {/* Notifications */}
             <button
               type="button"
-              className="p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-white/70 relative"
+              className="p-2 rounded-md text-gray-700 hover:text-slate-800 hover:bg-white/70 relative"
               aria-label="Notifications"
+              onClick={() => setShowNotificationsModal(true)}
             >
               <BellIcon className="h-6 w-6" />
-              <span className="absolute top-1 right-1 h-2 w-2 bg-danger-500 rounded-full"></span>
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 h-4 w-4 bg-danger-500 rounded-full flex items-center justify-center text-xs text-white font-semibold">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </button>
 
             {/* User Menu */}
             <Menu as="div" className="relative">
-              <Menu.Button className="flex items-center gap-2 p-2 rounded-md text-gray-700 hover:text-gray-900 hover:bg-white/70">
+              <Menu.Button className="flex items-center gap-2 p-2 rounded-md text-gray-700 hover:text-slate-800 hover:bg-white/70">
                 <UserCircleIcon className="h-6 w-6" />
                 <span className="hidden sm:block text-sm font-medium">{user?.username || 'User'}</span>
               </Menu.Button>
@@ -99,6 +109,11 @@ export default function Header() {
           </div>
         </div>
       </div>
+
+      <NotificationsModal
+        isOpen={showNotificationsModal}
+        onClose={() => setShowNotificationsModal(false)}
+      />
     </header>
   )
 }

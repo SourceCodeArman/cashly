@@ -55,7 +55,7 @@ export default function StripeCardElements({ onCardComplete, disableAutofill = t
 
   if (!elements) {
     return (
-      <div className="text-sm text-red-600">
+      <div className="text-sm text-danger-600">
         Stripe Elements not initialized. Please ensure you're wrapped in an Elements provider.
       </div>
     )
@@ -89,7 +89,7 @@ export default function StripeCardElements({ onCardComplete, disableAutofill = t
             />
           </div>
           {cardError && (
-            <p className="mt-1 text-sm text-red-600">{cardError}</p>
+            <p className="mt-1 text-sm text-danger-600">{cardError}</p>
           )}
         </div>
       </div>

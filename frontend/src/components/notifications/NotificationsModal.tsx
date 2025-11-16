@@ -74,7 +74,7 @@ export default function NotificationsModal({
             >
               Unread
               {unreadCount > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.5 bg-white text-violet-600 text-xs rounded-full font-medium">
+                <span className="ml-1.5 px-1.5 py-0.5 bg-white/30 text-violet-600 text-xs rounded-full font-medium">
                   {unreadCount}
                 </span>
               )}
@@ -102,7 +102,7 @@ export default function NotificationsModal({
           ) : notifications.length === 0 ? (
             <EmptyState
               title={filter === 'unread' ? 'No unread notifications' : 'No notifications'}
-              message={
+              description={
                 filter === 'unread'
                   ? "You're all caught up!"
                   : "You don't have any notifications yet."

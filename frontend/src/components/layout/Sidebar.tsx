@@ -32,8 +32,8 @@ export default function Sidebar() {
               cn(
                 'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-primary-50 text-primary-700'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-white/30 shadow-sm'
+                  : 'text-gray-700 hover:bg-white/40'
               )
             }
           >

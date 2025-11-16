@@ -35,9 +35,9 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     
     const variants = {
       primary: 'btn-primary-gradient text-white backdrop-blur-sm focus:ring-purple-400',
-      secondary: 'bg-white/40 backdrop-blur-md text-gray-900 border border-white/30 hover:bg-white/60 focus:ring-gray-500',
+      secondary: 'bg-white/30 backdrop-blur-md text-slate-800 border border-white/30 hover:bg-white/60 focus:ring-gray-500',
       danger: 'bg-danger-500/90 backdrop-blur-sm text-white hover:bg-danger-600/90 focus:ring-danger-500',
-      ghost: 'bg-white/40 backdrop-blur-md text-gray-700 border border-white/20 hover:bg-white/60 focus:ring-gray-500',
+      ghost: 'bg-white/30 backdrop-blur-md text-gray-700 border border-white/20 hover:bg-white/60 focus:ring-gray-500',
       success: 'bg-success-500/90 backdrop-blur-sm text-white hover:bg-success-600/90 focus:ring-success-500',
     }
     

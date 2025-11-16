@@ -28,7 +28,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <>
-      <div className="min-h-screen fixed inset-0 w-full h-full -z-10 bg-gradient-to-br from-slate-50 via-blue-50 via-indigo-50 to-purple-100"></div>
+      <div className="min-h-screen fixed inset-0 w-full h-full -z-10 bg-gradient-to-br from-primary-300 to-accent-200"></div>
       <div className="relative min-h-screen">
         <Header />
         <div className="flex">
@@ -62,7 +62,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 leaveFrom="translate-x-0"
                 leaveTo="-translate-x-full"
               >
-                <Dialog.Panel className="relative mr-16 flex w-64 max-w-full flex-1 bg-white pt-16 pb-4 shadow-xl">
+                <Dialog.Panel className="relative mr-16 flex w-64 max-w-full flex-1 bg-white/30pt-16 pb-4 shadow-xl">
                   <div className="w-full overflow-y-auto">
                     <Sidebar />
                   </div>

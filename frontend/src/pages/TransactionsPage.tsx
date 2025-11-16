@@ -243,10 +243,10 @@ export default function TransactionsPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Transactions</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Transactions</h1>
           {selectedAccountName ? (
             <p className="text-gray-600 mt-1">
-              Viewing transactions for <span className="font-semibold text-gray-900">{selectedAccountName}</span>
+              Viewing transactions for <span className="font-semibold text-slate-800">{selectedAccountName}</span>
             </p>
           ) : (
             <p className="text-gray-600 mt-1">View and manage your transactions</p>

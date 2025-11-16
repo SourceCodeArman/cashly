@@ -15,6 +15,7 @@ export interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl' | 'xxl' | 'full'
   showCloseButton?: boolean
   closeOnOverlayClick?: boolean
+  className?: string
 }
 
 const sizeClasses = {
@@ -27,6 +28,7 @@ const sizeClasses = {
 }
 
 export default function Modal({
+  className,
   isOpen,
   onClose,
   title,
@@ -80,7 +82,8 @@ export default function Modal({
             >
               <Dialog.Panel
                 className={cn(
-                  'w-full transform overflow-hidden rounded-lg bg-white p-6 text-left align-middle shadow-xl transition-all',
+                  'w-full transform overflow-hidden rounded-lg bg-white/30 backdrop-blur p-6 text-left align-middle shadow-xl transition-all',
+                  className,
                   sizeClasses[size],
                   size === 'full' && 'h-[90vh] flex flex-col'
                 )}

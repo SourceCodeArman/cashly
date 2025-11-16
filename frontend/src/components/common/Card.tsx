@@ -17,9 +17,9 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          'bg-white/40 backdrop-blur-md rounded-lg shadow-sm border border-white/30',
+          'bg-white/30 backdrop-blur-md rounded-lg shadow-sm border border-white/30',
           clickable && 'cursor-pointer',
-          hover && 'hover:shadow-md hover:bg-white/40 transition-all',
+          hover && 'hover:shadow-md hover:bg-white/30 transition-all',
           className
         )}
         {...props}
@@ -29,7 +29,7 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
         )}
         <div className="px-6 py-4">{children}</div>
         {footer && (
-          <div className="px-6 py-4 border-t border-white/30 bg-white/40">{footer}</div>
+          <div className="px-6 py-4 border-t border-white/30 bg-white/30">{footer}</div>
         )}
       </div>
     )

@@ -1,7 +1,7 @@
 /**
  * Tabs component with wrapping, smooth scrolling, and sliding background indicator
  */
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react'
 import { cn } from '@/utils/helpers'
 
 export interface Tab {
@@ -21,7 +21,10 @@ export default function Tabs({ tabs, activeTab, onTabChange, className }: TabsPr
   const navRef = useRef<HTMLElement>(null)
   const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const sliderRef = useRef<HTMLDivElement>(null)
+  const hideSliderTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [sliderStyle, setSliderStyle] = useState<React.CSSProperties>({})
+  const [sliderReady, setSliderReady] = useState(false)
+  const [showSlider, setShowSlider] = useState(false)
   const [columns, setColumns] = useState(2)
 
   // Calculate responsive number of columns based on screen size and number of tabs
@@ -50,7 +53,7 @@ export default function Tabs({ tabs, activeTab, onTabChange, className }: TabsPr
   }, [])
 
   // Update slider position to match active tab
-  const updateSliderPosition = useCallback(() => {
+  const updateSliderPosition = useCallback((skipTransition = false) => {
     const activeTabElement = tabRefs.current.get(activeTab)
     const navElement = navRef.current
     
@@ -64,24 +67,58 @@ export default function Tabs({ tabs, activeTab, onTabChange, className }: TabsPr
       const top = tabRect.top - navRect.top
       const height = tabRect.height
       
-      setSliderStyle({
-        left: `${left}px`,
-        width: `${width}px`,
-        top: `${top}px`,
-        height: `${height}px`,
-        transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), top 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-      })
+      // Only show slider if we have valid dimensions
+      if (width > 0 && height > 0) {
+        setSliderStyle({
+          left: `${left}px`,
+          width: `${width}px`,
+          top: `${top}px`,
+          height: `${height}px`,
+          transition: skipTransition || !sliderReady
+            ? 'none'
+            : 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1), top 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        })
+        setSliderReady(true)
+      }
+    }
+  }, [activeTab, sliderReady])
+
+  // Use useLayoutEffect for initial position to ensure it happens after DOM layout but before paint
+  useLayoutEffect(() => {
+    // Reset slider ready state when activeTab changes
+    setSliderReady(false)
+    
+    // Calculate position immediately after layout
+    updateSliderPosition(true)
+  }, [activeTab, updateSliderPosition])
+
+  // Show slider when tab changes, then hide it after 1 second
+  useEffect(() => {
+    // Clear any existing timeout
+    if (hideSliderTimeoutRef.current) {
+      clearTimeout(hideSliderTimeoutRef.current)
+    }
+
+    // Show the slider when tab changes
+    setShowSlider(true)
+
+    // Hide the slider after 1 second
+    hideSliderTimeoutRef.current = setTimeout(() => {
+      setShowSlider(false)
+    }, 1000)
+
+    // Cleanup timeout on unmount or tab change
+    return () => {
+      if (hideSliderTimeoutRef.current) {
+        clearTimeout(hideSliderTimeoutRef.current)
+      }
     }
   }, [activeTab])
-
-  useEffect(() => {
-    updateSliderPosition()
-  }, [updateSliderPosition])
 
   // Update slider position on window resize or layout changes
   useEffect(() => {
     const resizeObserver = new ResizeObserver(() => {
-      updateSliderPosition()
+      updateSliderPosition(false)
     })
 
     const navElement = navRef.current
@@ -89,11 +126,12 @@ export default function Tabs({ tabs, activeTab, onTabChange, className }: TabsPr
       resizeObserver.observe(navElement)
     }
 
-    window.addEventListener('resize', updateSliderPosition)
+    const handleResize = () => updateSliderPosition(false)
+    window.addEventListener('resize', handleResize)
 
     return () => {
       resizeObserver.disconnect()
-      window.removeEventListener('resize', updateSliderPosition)
+      window.removeEventListener('resize', handleResize)
     }
   }, [updateSliderPosition])
 
@@ -145,11 +183,15 @@ export default function Tabs({ tabs, activeTab, onTabChange, className }: TabsPr
         {/* Sliding background indicator */}
         <div
           ref={sliderRef}
-          className="absolute bg-white/80 backdrop-blur-md rounded-[10px] shadow-sm border border-white/30 pointer-events-none z-0"
-          style={sliderStyle}
+          className={cn(
+            "absolute bg-transparent backdrop-blur-md rounded-[10px] shadow-sm border border-white/30 pointer-events-none z-0 transition-opacity duration-300",
+            !sliderReady && "opacity-0",
+            !showSlider && sliderReady && "opacity-0"
+          )}
+          style={sliderReady ? sliderStyle : { display: 'none' }}
         >
           <div 
-            className="absolute inset-0 bg-gradient-to-b from-white/60 to-white/40 rounded-[10px]"
+            className="absolute inset-0 bg-transparent  rounded-[10px]"
             style={{
               boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
             }}
@@ -175,8 +217,8 @@ export default function Tabs({ tabs, activeTab, onTabChange, className }: TabsPr
                 'focus:outline-none',
                 'truncate text-center min-w-0 transition-all duration-200',
                 isActive
-                  ? 'text-primary-600 z-10'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-white/40 backdrop-blur-sm'
+                  ? 'text-primary-600 z-20 bg-white/30 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-white/40 backdrop-blur-sm z-10'
               )}
               aria-current={isActive ? 'page' : undefined}
             >

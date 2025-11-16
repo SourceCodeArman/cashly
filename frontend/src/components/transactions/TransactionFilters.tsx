@@ -65,7 +65,7 @@ export default function TransactionFilters({
               onFiltersChange({ ...filters, search: e.target.value })
             }
             placeholder="Search transactions..."
-            className="bg-white/30"
+            className="bg-white/30 "
           />
 
           <div className="grid grid-cols-2 gap-4">

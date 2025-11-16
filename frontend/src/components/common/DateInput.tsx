@@ -432,7 +432,7 @@ export default function DateInput({
             }}
           >
             <div
-              className="bg-white rounded-lg border border-gray-200 shadow-lg p-4 w-[320px]"
+              className="bg-white/30 rounded-lg border border-gray-200 shadow-lg p-4 w-[320px]"
               onMouseDown={(e) => {
                 // Prevent input blur when clicking inside the calendar
                 e.preventDefault()
