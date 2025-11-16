@@ -44,6 +44,7 @@ export interface TransactionFilters {
   is_transfer?: boolean
   search?: string
   page?: number
+  page_size?: number
   ordering?: string
 }
 

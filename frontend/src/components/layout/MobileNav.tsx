@@ -30,7 +30,7 @@ export default function MobileNav() {
               className={({ isActive }) =>
                 cn(
                   'flex flex-col items-center justify-center gap-1 text-xs font-medium transition-colors',
-                  isActive ? 'text-emerald-600' : 'text-gray-700'
+                  isActive ? 'text-purple-600' : 'text-gray-700'
                 )
               }
             >

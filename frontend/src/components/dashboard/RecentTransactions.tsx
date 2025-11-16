@@ -28,7 +28,7 @@ export default function RecentTransactions({
 }: RecentTransactionsProps) {
   if (isLoading) {
     return (
-      <Card>
+      <Card className="card-glass">
         <h3 className="text-lg font-semibold mb-4">Recent Transactions</h3>
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -41,7 +41,7 @@ export default function RecentTransactions({
 
   if (transactions.length === 0) {
     return (
-      <Card>
+      <Card className="card-glass">
         <h3 className="text-lg font-semibold mb-4">Recent Transactions</h3>
         <EmptyState
           title="No transactions yet"
@@ -54,7 +54,7 @@ export default function RecentTransactions({
   }
 
   return (
-    <Card>
+    <Card className="card-glass">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold">Recent Transactions</h3>
         <Link

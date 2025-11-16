@@ -12,6 +12,7 @@ export interface AccountListProps {
   onSync?: (accountId: string) => void
   onDelete?: (accountId: string) => void
   onUpdate?: (accountId: string, updates: { custom_name?: string | null }) => Promise<void>
+  onClick?: (account: Account) => void
   syncingAccountId?: string
   isUpdating?: boolean
   emptyStateTitle?: string
@@ -26,6 +27,7 @@ export default function AccountList({
   onSync,
   onDelete,
   onUpdate,
+  onClick,
   syncingAccountId,
   isUpdating,
   emptyStateTitle = 'No accounts connected',
@@ -63,6 +65,7 @@ export default function AccountList({
           onSync={onSync ? () => onSync(account.account_id) : undefined}
           onDelete={onDelete ? () => onDelete(account.account_id) : undefined}
           onUpdate={onUpdate ? (accountId, updates) => onUpdate(accountId, updates) : undefined}
+          onClick={onClick ? () => onClick(account) : undefined}
           isSyncing={syncingAccountId === account.account_id}
           isUpdating={isUpdating}
         />

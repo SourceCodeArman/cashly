@@ -27,9 +27,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-100 via-white to-white bg-mesh">
-      <Header />
-      <div className="flex">
+    <>
+      <div className="min-h-screen fixed inset-0 w-full h-full -z-10 bg-gradient-to-br from-slate-50 via-blue-50 via-indigo-50 to-purple-100"></div>
+      <div className="relative min-h-screen">
+        <Header />
+        <div className="flex">
         {/* Desktop Sidebar */}
         <aside className="hidden lg:block lg:w-64 lg:fixed lg:inset-y-0 lg:pt-16 lg:pb-4 lg:overflow-y-auto">
           <Sidebar />
@@ -86,11 +88,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
             {children}
           </div>
         </main>
+        </div>
+        
+        {/* Mobile Navigation */}
+        <MobileNav />
       </div>
-      
-      {/* Mobile Navigation */}
-      <MobileNav />
-    </div>
+    </>
   )
 }
 

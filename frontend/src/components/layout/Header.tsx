@@ -32,7 +32,7 @@ export default function Header() {
             </button>
             
             <Link to="/dashboard" className="flex items-center">
-              <span className="text-2xl font-bold text-emerald-600">Cashly</span>
+              <span className="text-2xl font-semibold text-gray-900 hover:opacity-90">Cashly</span>
             </Link>
           </div>
 

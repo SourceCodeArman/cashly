@@ -17,19 +17,19 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          'bg-white rounded-lg shadow-sm border border-gray-200',
+          'bg-white/40 backdrop-blur-md rounded-lg shadow-sm border border-white/30',
           clickable && 'cursor-pointer',
-          hover && 'hover:shadow-md transition-shadow',
+          hover && 'hover:shadow-md hover:bg-white/40 transition-all',
           className
         )}
         {...props}
       >
         {header && (
-          <div className="px-6 py-4 border-b border-gray-200">{header}</div>
+          <div className="px-6 py-4 border-b border-white/30">{header}</div>
         )}
         <div className="px-6 py-4">{children}</div>
         {footer && (
-          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">{footer}</div>
+          <div className="px-6 py-4 border-t border-white/30 bg-white/40">{footer}</div>
         )}
       </div>
     )

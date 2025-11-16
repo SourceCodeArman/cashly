@@ -26,7 +26,19 @@ export const passwordResetSchema = z.object({
   email: z.string().email('Invalid email address'),
 })
 
+export const subscriptionFormSchema = z.object({
+  plan: z.enum(['premium', 'pro'], {
+    required_error: 'Please select a plan',
+  }),
+  billing_cycle: z.enum(['monthly', 'annual'], {
+    required_error: 'Please select a billing cycle',
+  }),
+  trial_enabled: z.boolean().default(true),
+  // Payment method is handled separately via Stripe Elements
+})
+
 export type LoginFormData = z.infer<typeof loginSchema>
 export type RegisterFormData = z.infer<typeof registerSchema>
 export type PasswordResetFormData = z.infer<typeof passwordResetSchema>
+export type SubscriptionFormData = z.infer<typeof subscriptionFormSchema>
 

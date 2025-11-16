@@ -426,10 +426,38 @@ def create_transfer_authorization(
         source_account = Account.objects.get(account_id=source_account_id, user=user)
         destination_account = Account.objects.get(account_id=destination_account_id, user=user)
         
-        # Decrypt access tokens
+        # Verify account types from Plaid directly before attempting transfer
+        # This ensures we catch any mismatches between our DB and Plaid's actual account types
+        client = get_plaid_client()
         source_access_token = decrypt_token(source_account.plaid_access_token)
         
-        client = get_plaid_client()
+        try:
+            # Fetch source account details from Plaid to verify type
+            from plaid.model.accounts_get_request import AccountsGetRequest
+            accounts_request = AccountsGetRequest(access_token=source_access_token)
+            accounts_response = client.accounts_get(accounts_request)
+            
+            # Find the source account in Plaid's response
+            plaid_source_account = None
+            for acc in accounts_response['accounts']:
+                if acc['account_id'] == source_account.plaid_account_id:
+                    plaid_source_account = acc
+                    break
+            
+            if plaid_source_account:
+                plaid_type = plaid_source_account.get('type', '').lower()
+                if plaid_type != 'depository':
+                    raise PlaidIntegrationError(
+                        f"Source account is not a depository account in Plaid. "
+                        f"Plaid account type: {plaid_type}. "
+                        f"Only checking and savings accounts can be used for transfers."
+                    )
+        except PlaidIntegrationError:
+            # Re-raise our custom errors
+            raise
+        except Exception as plaid_check_error:
+            # If we can't verify from Plaid, log but continue (validation will catch it)
+            logger.warning(f"Could not verify account type from Plaid: {plaid_check_error}")
         
         # Create transfer authorization using Plaid's API
         # This does NOT execute a transfer - it only authorizes future transfers
@@ -495,17 +523,68 @@ def create_transfer_authorization(
             raise PlaidIntegrationError("Transfer Authorization API not available in this Plaid SDK version")
         except ApiException as exc:
             logger.error("Plaid API error creating transfer authorization: %s", exc)
-            raise PlaidIntegrationError(
-                f"Failed to create transfer authorization: {exc.body}"
-            ) from exc
+            # Parse Plaid error for better user-facing messages
+            error_body = exc.body
+            if isinstance(error_body, str):
+                import json
+                try:
+                    error_data = json.loads(error_body)
+                    error_code = error_data.get('error_code', '')
+                    error_message = error_data.get('error_message', '')
+                    
+                    if error_code == 'INVALID_ACCOUNT_ID' and 'depository' in error_message.lower():
+                        raise PlaidIntegrationError(
+                            f"Account is not a depository account. "
+                            f"Plaid transfers can only be made between checking and savings accounts. "
+                            f"Please select a checking or savings account for transfers."
+                        )
+                    else:
+                        raise PlaidIntegrationError(
+                            f"Failed to create transfer authorization: {error_message or error_body}"
+                        )
+                except (json.JSONDecodeError, KeyError):
+                    raise PlaidIntegrationError(
+                        f"Failed to create transfer authorization: {error_body}"
+                    ) from exc
+            else:
+                raise PlaidIntegrationError(
+                    f"Failed to create transfer authorization: {exc.body}"
+                ) from exc
         
     except Account.DoesNotExist:
         raise PlaidIntegrationError("Source or destination account not found")
+    except PlaidIntegrationError:
+        # Re-raise our custom errors
+        raise
     except ApiException as exc:
         logger.error("Plaid API error creating transfer authorization: %s", exc)
-        raise PlaidIntegrationError(
-            f"Failed to create transfer authorization: {exc.body}"
-        ) from exc
+        # Parse Plaid error for better user-facing messages
+        error_body = exc.body
+        if isinstance(error_body, str):
+            import json
+            try:
+                error_data = json.loads(error_body)
+                error_code = error_data.get('error_code', '')
+                error_message = error_data.get('error_message', '')
+                
+                if error_code == 'INVALID_ACCOUNT_ID' and 'depository' in error_message.lower():
+                    raise PlaidIntegrationError(
+                        f"Account is not a depository account. "
+                        f"Plaid transfers can only be made between checking and savings accounts. "
+                        f"Please select a checking or savings account for transfers."
+                    )
+                else:
+                    raise PlaidIntegrationError(
+                        f"Failed to create transfer authorization: {error_message or error_body}"
+                    )
+            except (json.JSONDecodeError, KeyError):
+                raise PlaidIntegrationError(
+                    f"Failed to create transfer authorization: {error_body}"
+                ) from exc
+        else:
+            raise PlaidIntegrationError(
+                f"Failed to create transfer authorization: {exc.body}"
+            ) from exc
     except Exception as exc:
         logger.error("Unexpected error creating transfer authorization: %s", exc)
         raise PlaidIntegrationError("Failed to create transfer authorization") from exc

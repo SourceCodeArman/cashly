@@ -25,6 +25,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
       className,
       id,
       type = 'text',
+      onWheel,
       ...props
     },
     ref
@@ -66,6 +67,14 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             aria-describedby={
               error ? `${inputId}-error` : helperText ? `${inputId}-helper` : undefined
             }
+            onWheel={(e) => {
+              // Prevent number input from changing value on scroll
+              if (type === 'number') {
+                e.currentTarget.blur()
+              }
+              // Call any custom onWheel handler from props
+              onWheel?.(e)
+            }}
             {...props}
           />
           {rightIcon && (

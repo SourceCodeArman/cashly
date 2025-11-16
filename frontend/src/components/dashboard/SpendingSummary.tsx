@@ -34,7 +34,7 @@ export default function SpendingSummary({
   const topCategories = byCategory.slice(0, 5)
 
   return (
-    <Card>
+    <Card className="card-glass">
       <h3 className="text-lg font-semibold mb-4">Spending Summary</h3>
       
       <div className="mb-6">

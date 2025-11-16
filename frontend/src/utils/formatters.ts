@@ -116,3 +116,33 @@ export function formatAccountNumber(masked: string | undefined | null): string |
   return `${middleDot.repeat(12)}${lastFour}`
 }
 
+/**
+ * Format account type for display
+ * Converts snake_case to Title Case (e.g., "credit_card" -> "Credit Card")
+ */
+export function formatAccountType(accountType: string | undefined | null): string | null {
+  if (!accountType) return null
+  
+  // Convert snake_case or kebab-case to Title Case
+  return accountType
+    .split(/[_-]/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ')
+}
+
+/**
+ * Get last 4 digits from a masked account number
+ * Extracts and returns only the last 4 digits without formatting
+ */
+export function getLastFourDigits(masked: string | undefined | null): string | null {
+  if (!masked) return null
+  
+  // Extract only digits and take the last 4
+  const digits = masked.replace(/\D/g, '')
+  const lastFour = digits.slice(-4)
+  
+  if (!lastFour || lastFour.length !== 4) return null
+  
+  return lastFour
+}
+

@@ -64,6 +64,10 @@ ACCOUNT_TYPE_MAP = {
     "investment": "investment",
     "brokerage": "investment",
     "depository": "checking",
+    # CD accounts should be excluded from transfers, map to investment to filter them out
+    "cd": "investment",
+    "certificate of deposit": "investment",
+    "certificate": "investment",
 }
 
 

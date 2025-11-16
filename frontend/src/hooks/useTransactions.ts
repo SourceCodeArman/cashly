@@ -24,6 +24,7 @@ export function useTransactions(filters?: TransactionFilters) {
       }
       throw new Error(response.message || 'Failed to fetch transactions')
     },
+    enabled: filters !== undefined,
     staleTime: 30000, // 30 seconds
   })
 
@@ -107,6 +108,71 @@ export function useTransactions(filters?: TransactionFilters) {
     isCategorizing: categorizeMutation.isPending,
     stats,
     goToPage,
+  }
+}
+
+/**
+ * Hook to fetch all transactions (without pagination) for client-side filtering
+ * Fetches all pages by following pagination links
+ */
+export function useAllTransactions(filters?: TransactionFilters) {
+  // Remove page from filters to start from page 1
+  const baseFilters = filters || {}
+  const { page, ...filtersWithoutPage } = baseFilters
+  
+  // Use a large page size to minimize requests, but will still follow pagination if needed
+  const allFilters: TransactionFilters = { ...filtersWithoutPage, page: 1, page_size: 1000 }
+  
+  const {
+    data: transactionsData,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['transactions', 'all', filtersWithoutPage],
+    queryFn: async () => {
+      const allTransactions: Transaction[] = []
+      let currentPage = 1
+      let hasMore = true
+      
+      while (hasMore) {
+        const response = await transactionService.getTransactions({
+          ...allFilters,
+          page: currentPage,
+        })
+        
+        if (response.status === 'success' && response.data) {
+          allTransactions.push(...response.data.results)
+          
+          // Check if there's a next page
+          hasMore = !!response.data.next
+          currentPage++
+          
+          // Safety limit to prevent infinite loops
+          if (currentPage > 100) {
+            console.warn('Reached maximum page limit (100) while fetching all transactions')
+            break
+          }
+        } else {
+          throw new Error(response.message || 'Failed to fetch transactions')
+        }
+      }
+      
+      return {
+        results: allTransactions,
+        count: allTransactions.length,
+        next: null,
+        previous: null,
+      }
+    },
+    staleTime: 30000, // 30 seconds
+  })
+
+  return {
+    transactions: transactionsData?.results || [],
+    isLoading,
+    error,
+    refetch,
   }
 }
 

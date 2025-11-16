@@ -6,12 +6,15 @@ import { useLocation } from 'react-router-dom'
 import { useAccounts } from '@/hooks/useAccounts'
 import AccountList from '@/components/accounts/AccountList'
 import AccountFilters, { type AccountFiltersState } from '@/components/accounts/AccountFilters'
+import AccountDetailModal from '@/components/accounts/AccountDetailModal'
 import PlaidLink from '@/components/accounts/PlaidLink'
 import Button from '@/components/common/Button'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
 import ErrorMessage from '@/components/common/ErrorMessage'
 import Modal from '@/components/common/Modal'
+import ConfirmModal from '@/components/common/ConfirmModal'
 import { applyAccountFilters } from '@/utils/accountFilters'
+import type { Account } from '@/types/account.types'
 
 export default function AccountsPage() {
   const {
@@ -33,6 +36,10 @@ export default function AccountsPage() {
   } = useAccounts()
   const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null)
   const [showConnectModal, setShowConnectModal] = useState(false)
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
+  const [showAccountModal, setShowAccountModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [accountToDelete, setAccountToDelete] = useState<string | null>(null)
   const [filters, setFilters] = useState<AccountFiltersState>({
     search: '',
     accountType: 'all',
@@ -73,11 +80,24 @@ export default function AccountsPage() {
     }
   }
 
-  const handleDelete = async (accountId: string) => {
-    if (window.confirm('Are you sure you want to disconnect this account?')) {
-      await deleteAccount(accountId)
+  const handleDelete = (accountId: string) => {
+    setAccountToDelete(accountId)
+    setShowDeleteConfirm(true)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (accountToDelete) {
+      await deleteAccount(accountToDelete)
+      setAccountToDelete(null)
+      setShowDeleteConfirm(false)
     }
   }
+
+  const handleDeleteFromModal = async (accountId: string) => {
+    // Delete handler for modal (confirm is handled in modal)
+    await deleteAccount(accountId)
+  }
+
 
   const handleUpdate = async (accountId: string, updates: { custom_name?: string | null }) => {
     await updateAccount({ accountId, updates })
@@ -92,6 +112,17 @@ export default function AccountsPage() {
     })
   }
 
+  const handleAccountClick = (account: Account) => {
+    setSelectedAccount(account)
+    setShowAccountModal(true)
+  }
+
+  const handleCloseAccountModal = () => {
+    setShowAccountModal(false)
+    setSelectedAccount(null)
+  }
+
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -99,9 +130,11 @@ export default function AccountsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Accounts</h1>
           <p className="text-gray-600 mt-1">Manage your connected bank accounts</p>
         </div>
-        <Button variant="primary" onClick={() => setShowConnectModal(true)}>
-          Connect Account
-        </Button>
+        <div className="flex gap-3">
+          <Button variant="primary" onClick={() => setShowConnectModal(true)}>
+            Connect Account
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -126,6 +159,7 @@ export default function AccountsPage() {
             onSync={handleSync}
             onDelete={handleDelete}
             onUpdate={handleUpdate}
+            onClick={handleAccountClick}
             syncingAccountId={syncingAccountId || undefined}
             isUpdating={isUpdating}
             emptyStateTitle={
@@ -154,7 +188,7 @@ export default function AccountsPage() {
         title="Connect Account"
       >
         <PlaidLink
-          linkToken={linkToken}
+          linkToken={linkToken as string | undefined}
           isLoadingToken={isCreatingLinkToken}
           isConnecting={isConnecting}
           onCreateLinkToken={() => createLinkToken()}
@@ -162,6 +196,33 @@ export default function AccountsPage() {
           onClose={() => setShowConnectModal(false)}
         />
       </Modal>
+
+      <AccountDetailModal
+        account={selectedAccount}
+        isOpen={showAccountModal}
+        onClose={handleCloseAccountModal}
+        onSync={handleSync}
+        onDelete={handleDeleteFromModal}
+        onUpdate={handleUpdate}
+        isSyncing={isSyncing && syncingAccountId === selectedAccount?.account_id}
+        isDeleting={isDeleting}
+        isUpdating={isUpdating}
+      />
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => {
+          setShowDeleteConfirm(false)
+          setAccountToDelete(null)
+        }}
+        onConfirm={handleConfirmDelete}
+        title="Disconnect Account"
+        message="Are you sure you want to disconnect this account? This action cannot be undone."
+        confirmLabel="Disconnect"
+        cancelLabel="Cancel"
+        confirmVariant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   )
 }

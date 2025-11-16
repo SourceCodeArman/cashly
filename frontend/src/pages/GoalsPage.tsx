@@ -17,6 +17,7 @@ import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import EditGoalModal from '@/components/goals/EditGoalModal'
 import ContributionModal from '@/components/goals/ContributionModal'
+import TransferModal from '@/components/goals/TransferModal'
 import ConfirmDeleteModal from '@/components/common/ConfirmDeleteModal'
 import { formatCurrency } from '@/utils/formatters'
 import type { Goal, ContributionRulesConfig, ReminderSettings } from '@/types/goal.types'
@@ -56,6 +57,7 @@ export default function GoalsPage() {
   const [showArchiveModal, setShowArchiveModal] = useState(false)
   const [showCompleteModal, setShowCompleteModal] = useState(false)
   const [showAuthorizationModal, setShowAuthorizationModal] = useState(false)
+  const [showTransferModal, setShowTransferModal] = useState(false)
   
   // Determine filter values for API
   const isActive = filter === 'active' ? true : filter === 'archived' ? false : undefined
@@ -88,6 +90,8 @@ export default function GoalsPage() {
     isAuthorizing,
     syncBalance,
     isSyncingBalance,
+    transfer,
+    isTransferring,
   } = useGoals(isActive, isCompleted)
   
   // Get categories for goal creation/edit
@@ -296,6 +300,13 @@ export default function GoalsPage() {
               syncBalance(goalId)
             }
           }}
+          onTransfer={(goalId) => {
+            const g = goals.find((x) => x.goal_id === goalId) || null
+            setSelectedGoal(g)
+            if (g) {
+              setShowTransferModal(true)
+            }
+          }}
         />
       )}
 
@@ -332,6 +343,42 @@ export default function GoalsPage() {
             setSelectedGoal(null)
           }}
           isSubmitting={isAddingContribution}
+        />
+      )}
+
+      {/* Transfer Modal */}
+      {selectedGoal && selectedGoal.destination_account_id && (
+        <TransferModal
+          isOpen={showTransferModal}
+          onClose={() => {
+            setShowTransferModal(false)
+            setSelectedGoal(null)
+          }}
+          onSubmit={async (data) => {
+            if (selectedGoal.destination_account_id) {
+              // The TransferModal handles the transfer and shows progress
+              // We just need to call the transfer mutation
+              try {
+                const result = await transfer({
+                  sourceAccountId: data.source_account_id,
+                  destinationAccountId: selectedGoal.destination_account_id,
+                  goalId: selectedGoal.goal_id,
+                  amount: data.amount,
+                  description: data.description,
+                })
+                // Return result so TransferModal can handle progress
+                return result
+              } catch (error) {
+                // Re-throw error so TransferModal can handle it
+                throw error
+              }
+            }
+          }}
+          goalId={selectedGoal.goal_id}
+          destinationAccountId={selectedGoal.destination_account_id}
+          destinationAccountName={selectedGoal.destination_account_name}
+          accounts={accounts}
+          isSubmitting={isTransferring}
         />
       )}
 

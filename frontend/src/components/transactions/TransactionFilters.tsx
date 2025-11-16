@@ -2,7 +2,9 @@
  * Transaction filters component
  */
 import { useState } from 'react'
+import { startOfDay, parseISO } from 'date-fns'
 import Input from '@/components/common/Input'
+import DateInput from '@/components/common/DateInput'
 import Button from '@/components/common/Button'
 import type { TransactionFilters as TransactionFiltersType } from '@/types/transaction.types'
 
@@ -25,6 +27,7 @@ export default function TransactionFilters({
 }: TransactionFiltersProps) {
   const [internalOpen, setInternalOpen] = useState(false)
   const open = typeof isOpen === 'boolean' ? isOpen : internalOpen
+  
   const handleToggle = () => {
     if (onToggle) {
       onToggle()
@@ -44,7 +47,7 @@ export default function TransactionFilters({
           >
             {open ? 'Hide' : 'Show'} Filters
           </Button>
-          {(filters.date_from || filters.category || filters.search) && (
+          {(filters.date_from || filters.date_to || filters.category || filters.account || filters.search) && (
             <Button variant="ghost" size="sm" onClick={onClear}>
               Clear
             </Button>
@@ -53,7 +56,7 @@ export default function TransactionFilters({
       )}
 
       {open && (
-        <div className="bg-white p-4 rounded-lg border border-gray-200 space-y-4">
+        <div className="bg-white/30 p-4 rounded-lg border border-gray-200 space-y-4">
           <Input
             label="Search"
             type="text"
@@ -62,25 +65,31 @@ export default function TransactionFilters({
               onFiltersChange({ ...filters, search: e.target.value })
             }
             placeholder="Search transactions..."
+            className="bg-white/30"
           />
 
           <div className="grid grid-cols-2 gap-4">
-            <Input
+            <DateInput
               label="From Date"
-              type="date"
-              value={filters.date_from || ''}
-              onChange={(e) =>
-                onFiltersChange({ ...filters, date_from: e.target.value })
+              value={filters.date_from}
+              onChange={(value) =>
+                onFiltersChange({ ...filters, date_from: value })
               }
+              placeholder="mm/dd/yyyy"
+              maxDate={filters.date_to ? parseISO(filters.date_to) : startOfDay(new Date())}
+              className="bg-white/30"
             />
 
-            <Input
+            <DateInput
               label="To Date"
-              type="date"
-              value={filters.date_to || ''}
-              onChange={(e) =>
-                onFiltersChange({ ...filters, date_to: e.target.value })
+              value={filters.date_to}
+              onChange={(value) =>
+                onFiltersChange({ ...filters, date_to: value })
               }
+              placeholder="mm/dd/yyyy"
+              minDate={filters.date_from ? parseISO(filters.date_from) : undefined}
+              maxDate={startOfDay(new Date())}
+              className="bg-white/30"
             />
           </div>
         </div>

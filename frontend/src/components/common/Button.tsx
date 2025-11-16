@@ -8,6 +8,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'success'
   size?: 'sm' | 'md' | 'lg'
   isLoading?: boolean
+  loadingText?: string
   fullWidth?: boolean
   leftIcon?: React.ReactNode
   rightIcon?: React.ReactNode
@@ -19,6 +20,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       variant = 'primary',
       size = 'md',
       isLoading = false,
+      loadingText,
       fullWidth = false,
       leftIcon,
       rightIcon,
@@ -32,11 +34,11 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const baseStyles = 'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed'
     
     const variants = {
-      primary: 'btn-primary-gradient text-white focus:ring-emerald-400',
-      secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 focus:ring-gray-500',
-      danger: 'bg-danger-500 text-white hover:bg-danger-600 focus:ring-danger-500',
-      ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-500',
-      success: 'bg-success-500 text-white hover:bg-success-600 focus:ring-success-500',
+      primary: 'btn-primary-gradient text-white backdrop-blur-sm focus:ring-purple-400',
+      secondary: 'bg-white/40 backdrop-blur-md text-gray-900 border border-white/30 hover:bg-white/60 focus:ring-gray-500',
+      danger: 'bg-danger-500/90 backdrop-blur-sm text-white hover:bg-danger-600/90 focus:ring-danger-500',
+      ghost: 'bg-white/40 backdrop-blur-md text-gray-700 border border-white/20 hover:bg-white/60 focus:ring-gray-500',
+      success: 'bg-success-500/90 backdrop-blur-sm text-white hover:bg-success-600/90 focus:ring-success-500',
     }
     
     const sizes = {
@@ -80,7 +82,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
                 d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
               />
             </svg>
-            Loading...
+            {loadingText || 'Loading...'}
           </>
         ) : (
           <>

@@ -12,20 +12,28 @@ export interface AccountCardProps {
   account: Account
   onSync?: () => Promise<void> | void
   onDelete?: () => void
+  onDeactivate?: () => Promise<void> | void
+  onActivate?: () => Promise<void> | void
   onUpdate?: (accountId: string, updates: { custom_name?: string | null }) => Promise<void>
   onClick?: () => void
   isSyncing?: boolean
   isUpdating?: boolean
+  isDeactivating?: boolean
+  isActivating?: boolean
 }
 
 export default function AccountCard({
   account,
   onSync,
   onDelete,
+  onDeactivate,
+  onActivate,
   onUpdate,
   onClick,
   isSyncing,
   isUpdating,
+  isDeactivating,
+  isActivating,
 }: AccountCardProps) {
   const [isEditingName, setIsEditingName] = useState(false)
   const [editedName, setEditedName] = useState(account.custom_name || '')
@@ -120,13 +128,13 @@ export default function AccountCard({
   }
 
   return (
-    <Card className="h-full flex flex-col">
+    <Card className={`h-full flex flex-col ${!account.is_active ? 'border-gray-300 bg-gray-50' : ''}`}>
       <div className="h-full flex flex-col">
         <div
           className={`flex items-start justify-between mb-4 flex-1 ${onClick ? 'cursor-pointer' : ''}`}
           onClick={handleCardClick}
         >
-        <div className="flex-1 min-w-0">
+        <div className={`flex-1 min-w-0 ${!account.is_active ? 'opacity-75' : ''}`}>
           {isEditingName ? (
             <div className="flex items-center gap-2">
               <input
@@ -169,6 +177,11 @@ export default function AccountCard({
               <h3 className="text-lg font-semibold text-gray-900 truncate">
                 {displayName}
               </h3>
+              {!account.is_active && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 whitespace-nowrap">
+                  Inactive
+                </span>
+              )}
               {onUpdate && (
                 <button
                 onClick={(e) => {
@@ -193,20 +206,22 @@ export default function AccountCard({
             </p>
           )}
         </div>
-        <div className="text-right ml-4">
+        <div className={`text-right ml-4 ${!account.is_active ? 'opacity-75' : ''}`}>
           <p className="text-2xl font-bold text-gray-900">
             {formatCurrency(parseFloat(account.balance), account.currency)}
           </p>
         </div>
         </div>
         <div className="mt-auto">
-          <p className="text-xs text-gray-500 mb-4">
+        <p className={`text-xs text-gray-500 mb-4 ${!account.is_active ? 'opacity-75' : ''}`}>
             {account.last_synced_at
               ? `Last synced ${formatRelativeTime(account.last_synced_at)}`
               : 'Never synced'}
-          </p>
+        </p>
 
           <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+        {account.is_active ? (
+          <>
             {onSync && (
               <Button
                 variant={recentlySynced ? "success" : "primary"}
@@ -219,11 +234,45 @@ export default function AccountCard({
                 {recentlySynced ? 'Synced!' : 'Sync'}
               </Button>
             )}
+            {onDeactivate && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onDeactivate}
+                isLoading={isDeactivating}
+                disabled={isDeactivating}
+                fullWidth
+              >
+                Deactivate
+              </Button>
+            )}
             {onDelete && (
               <Button variant="danger" size="sm" onClick={onDelete} fullWidth>
                 Disconnect
               </Button>
             )}
+          </>
+        ) : (
+          <>
+            {onActivate && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={onActivate}
+                isLoading={isActivating}
+                disabled={isActivating}
+                fullWidth
+              >
+                Activate
+              </Button>
+            )}
+            {onDelete && (
+              <Button variant="danger" size="sm" onClick={onDelete} fullWidth>
+                Disconnect
+              </Button>
+            )}
+          </>
+        )}
           </div>
         </div>
       </div>

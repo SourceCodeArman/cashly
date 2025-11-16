@@ -55,13 +55,49 @@ export function useAuth() {
     mutationFn: async (data: RegisterData) => {
       const response = await authService.register(data)
       if (response.status === 'success') {
+        // If registration includes login (auto-login), login the user
+        if ('access' in response.data && 'refresh' in response.data && 'user' in response.data) {
+          const { access, refresh, user: userData } = response.data as any
+          storeLogin({ access, refresh }, userData)
+          return { registrationData: response.data, user: userData }
+        }
+        // If backend doesn't auto-login, try to login with same credentials
+        try {
+          const loginResponse = await authService.login({
+            email: data.email,
+            password: data.password,
+          })
+          if (loginResponse.status === 'success' && loginResponse.data) {
+            const { access, refresh, user: userData } = loginResponse.data
+            storeLogin({ access, refresh }, userData)
+            return { registrationData: response.data, user: userData }
+          }
+        } catch (loginError) {
+          // If auto-login fails, just return registration data
+          console.warn('Auto-login after registration failed:', loginError)
+        }
         return response.data
       }
       throw new Error(response.message || 'Registration failed')
     },
     onSuccess: () => {
-      toast.success('Registration successful. Please login.')
-      navigate('/login')
+      queryClient.invalidateQueries({ queryKey: ['user'] })
+      toast.success('Registration successful!')
+      
+      // Check if a plan was selected before registration
+      const storedPlan = localStorage.getItem('selectedPlan')
+      console.log('[useAuth] Registration successful, stored plan:', storedPlan)
+      
+      if (storedPlan && (storedPlan === 'premium' || storedPlan === 'pro')) {
+        const checkoutUrl = `/dashboard?checkout=true&plan=${storedPlan}`
+        console.log('[useAuth] Navigating to:', checkoutUrl)
+        localStorage.removeItem('selectedPlan')
+        navigate(checkoutUrl, { replace: true })
+      } else {
+        console.log('[useAuth] No plan selected, navigating to dashboard')
+        localStorage.removeItem('selectedPlan')
+        navigate('/dashboard', { replace: true })
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Registration failed')

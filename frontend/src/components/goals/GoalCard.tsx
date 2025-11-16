@@ -9,7 +9,6 @@ import type { Goal } from '@/types/goal.types'
 
 export interface GoalCardProps {
   goal: Goal
-  onContribute?: () => void
   onView?: () => void
   onEdit?: () => void
   onComplete?: () => void
@@ -18,11 +17,11 @@ export interface GoalCardProps {
   onDelete?: () => void
   onAuthorize?: () => void
   onSyncBalance?: () => void
+  onTransfer?: () => void
 }
 
 export default function GoalCard({
   goal,
-  onContribute,
   onView,
   onEdit,
   onComplete,
@@ -31,6 +30,7 @@ export default function GoalCard({
   onDelete,
   onAuthorize,
   onSyncBalance,
+  onTransfer,
 }: GoalCardProps) {
   const progress = goal.progress_percentage || 0
   const current = parseFloat(goal.current_amount)
@@ -168,8 +168,8 @@ export default function GoalCard({
             Sync Balance
           </Button>
         )}
-        {onContribute && !isCompleted && !isArchived && goal.is_active && (
-          <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); onContribute(); }} fullWidth>
+        {goal.transfer_authorized && goal.destination_account_id && onTransfer && !isArchived && goal.is_active && (
+          <Button variant="primary" size="sm" onClick={(e) => { e.stopPropagation(); onTransfer(); }} fullWidth>
             Contribute
           </Button>
         )}

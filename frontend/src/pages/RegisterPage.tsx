@@ -2,20 +2,25 @@
  * Register page
  */
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { authStore } from '@/store/authStore'
 import RegisterForm from '@/components/auth/RegisterForm'
 import Card from '@/components/common/Card'
 
 export default function RegisterPage() {
-  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const isAuthenticated = authStore((state) => state.isAuthenticated)
+  const plan = searchParams.get('plan')
 
+  // Store the selected plan in localStorage for use after registration
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/dashboard', { replace: true })
+    if (plan) {
+      localStorage.setItem('selectedPlan', plan)
     }
-  }, [isAuthenticated, navigate])
+  }, [plan])
+
+  // Note: Navigation is handled by useAuth hook after successful registration
+  // We just store the plan here for useAuth to pick up
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

@@ -4,6 +4,7 @@
 import { useAuth } from '@/hooks/useAuth'
 import Card from '@/components/common/Card'
 import Button from '@/components/common/Button'
+import SubscriptionInfo from '@/components/subscriptions/SubscriptionInfo'
 
 export default function SettingsPage() {
   const { user, logout } = useAuth()
@@ -15,7 +16,11 @@ export default function SettingsPage() {
         <p className="text-gray-600 mt-1">Manage your account settings</p>
       </div>
 
-      <Card>
+      {/* Subscription Section */}
+      <SubscriptionInfo />
+
+      {/* Profile Section */}
+      <Card className="card-glass">
         <h2 className="text-lg font-semibold mb-4">Profile</h2>
         <div className="space-y-2">
           <p className="text-sm text-gray-600">
@@ -27,7 +32,8 @@ export default function SettingsPage() {
         </div>
       </Card>
 
-      <Card>
+      {/* Account Section */}
+      <Card className="card-glass">
         <h2 className="text-lg font-semibold mb-4">Account</h2>
         <Button variant="danger" onClick={logout}>
           Sign Out

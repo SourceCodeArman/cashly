@@ -12,7 +12,7 @@ export interface ModalProps {
   title?: string
   description?: string
   children: React.ReactNode
-  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'xxl' | 'full'
   showCloseButton?: boolean
   closeOnOverlayClick?: boolean
 }
@@ -22,6 +22,7 @@ const sizeClasses = {
   md: 'max-w-lg',
   lg: 'max-w-2xl',
   xl: 'max-w-4xl',
+  xxl: 'max-w-6xl',
   full: 'max-w-full mx-4',
 }
 

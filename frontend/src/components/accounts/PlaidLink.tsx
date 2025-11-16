@@ -7,7 +7,9 @@ import { usePlaidLink } from 'react-plaid-link'
 import Button from '@/components/common/Button'
 import ErrorMessage from '@/components/common/ErrorMessage'
 import LoadingSpinner from '@/components/common/LoadingSpinner'
+import AccountSelectionModal from './AccountSelectionModal'
 import type { AccountConnectionData } from '@/types/account.types'
+import type { PlaidAccount } from './AccountSelectionModal'
 import { getPlaidErrorMessage } from '@/utils/plaidErrors'
 
 interface PlaidLinkProps {
@@ -35,6 +37,11 @@ function PlaidLinkButton({
   onError,
 }: PlaidLinkButtonProps) {
   const [isOpening, setIsOpening] = useState(false)
+  const [showAccountSelection, setShowAccountSelection] = useState(false)
+  const [plaidAccounts, setPlaidAccounts] = useState<PlaidAccount[]>([])
+  const [institutionName, setInstitutionName] = useState<string | undefined>()
+  const [publicToken, setPublicToken] = useState<string | null>(null)
+  const [institutionId, setInstitutionId] = useState<string>('')
 
   const config = useMemo(
     () => ({
@@ -42,13 +49,36 @@ function PlaidLinkButton({
       onSuccess: async (publicToken: string, metadata: any) => {
         try {
           setIsOpening(false)
-          await onConnect({
-            public_token: publicToken,
-            institution_id: metadata?.institution?.institution_id ?? '',
-            institution_name: metadata?.institution?.name ?? undefined,
-            selected_account_ids: metadata?.accounts?.map((account: any) => account.id) ?? [],
-          })
-          onClose()
+          
+          // Extract account data from Plaid metadata
+          const accounts: PlaidAccount[] = (metadata?.accounts || []).map((account: any) => ({
+            account_id: account.id,
+            name: account.name || 'Unknown Account',
+            mask: account.mask || undefined,
+            type: account.type || undefined,
+            subtype: account.subtype || undefined,
+            balances: account.balances || undefined,
+          }))
+
+          // Store data for account selection modal
+          setPlaidAccounts(accounts)
+          setInstitutionName(metadata?.institution?.name)
+          setPublicToken(publicToken)
+          setInstitutionId(metadata?.institution?.institution_id ?? '')
+          
+          // Show account selection modal if we have accounts
+          if (accounts.length > 0) {
+            setShowAccountSelection(true)
+          } else {
+            // No accounts to select, proceed directly
+            await onConnect({
+              public_token: publicToken,
+              institution_id: metadata?.institution?.institution_id ?? '',
+              institution_name: metadata?.institution?.name ?? undefined,
+              selected_account_ids: [],
+            })
+            onClose()
+          }
         } catch (error) {
           const message =
             error instanceof Error ? error.message : 'Unable to connect account. Please try again.'
@@ -79,20 +109,58 @@ function PlaidLinkButton({
     open()
   }
 
+  const handleAccountSelectionConfirm = async (data: {
+    selected_account_ids: string[]
+    account_custom_names: Record<string, string>
+  }) => {
+    if (!publicToken) return
+
+    try {
+      await onConnect({
+        public_token: publicToken,
+        institution_id: institutionId,
+        institution_name: institutionName,
+        selected_account_ids: data.selected_account_ids,
+        account_custom_names: data.account_custom_names,
+      })
+      setShowAccountSelection(false)
+      onClose()
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to connect account. Please try again.'
+      onError(message)
+    }
+  }
+
   return (
-    <div className="space-y-4">
-      <Button
-        variant="primary"
-        onClick={handleOpen}
-        disabled={!ready || isOpening || isConnecting}
-        fullWidth
-      >
-        {isOpening || isConnecting ? 'Connecting...' : 'Launch Plaid'}
-      </Button>
-      <p className="text-xs text-gray-500 text-center">
-        You will be securely redirected to Plaid to select your financial institution.
-      </p>
-    </div>
+    <>
+      <div className="space-y-4">
+        <Button
+          variant="primary"
+          onClick={handleOpen}
+          disabled={!ready || isOpening || isConnecting}
+          fullWidth
+        >
+          {isOpening || isConnecting ? 'Connecting...' : 'Launch Plaid'}
+        </Button>
+        <p className="text-xs text-gray-500 text-center">
+          You will be securely redirected to Plaid to select your financial institution.
+        </p>
+      </div>
+
+      {/* Account Selection Modal */}
+      <AccountSelectionModal
+        isOpen={showAccountSelection}
+        onClose={() => {
+          setShowAccountSelection(false)
+          onClose()
+        }}
+        accounts={plaidAccounts}
+        institutionName={institutionName}
+        onConfirm={handleAccountSelectionConfirm}
+        isConnecting={isConnecting}
+      />
+    </>
   )
 }
 

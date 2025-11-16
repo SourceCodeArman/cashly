@@ -2,20 +2,33 @@
  * Public Landing Header (Navbar)
  * Sticky, translucent, glassmorphism style
  */
-export default function LandingHeader() {
+interface LandingHeaderProps {
+  onOpenPricing?: () => void
+}
+
+export default function LandingHeader({ onOpenPricing }: LandingHeaderProps) {
   return (
-    <nav className="sticky top-0 z-30 border-b border-white/20 bg-white/60 backdrop-blur">
+    <nav className="sticky top-0 z-30 backdrop-blur">
       <div className="container-custom flex h-14 items-center justify-between">
-        <a href="/" className="font-semibold text-gray-900 hover:opacity-90">
+        <a href="/" className="text-2xl font-semibold text-gray-900 hover:opacity-90">
           Cashly
         </a>
-        <div className="hidden md:flex items-center gap-6 text-sm text-gray-700">
-          <a href="#features" className="hover:text-gray-900">
+        <div className="hidden md:flex items-center gap-6 text-sm text-black">
+          <a href="#features" className="hover:text-black">
             Features
           </a>
-          <a href="#pricing" className="hover:text-gray-900">
-            Pricing
-          </a>
+          {onOpenPricing ? (
+            <button 
+              onClick={onOpenPricing}
+              className="hover:text-gray-900 cursor-pointer"
+            >
+              Pricing
+            </button>
+          ) : (
+            <a href="#pricing" className="hover:text-gray-900">
+              Pricing
+            </a>
+          )}
           <a href="/login" className="hover:text-gray-900">
             Login
           </a>

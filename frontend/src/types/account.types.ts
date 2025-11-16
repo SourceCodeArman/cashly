@@ -26,6 +26,7 @@ export interface AccountConnectionData {
   institution_id: string
   institution_name?: string
   selected_account_ids?: string[]
+  account_custom_names?: Record<string, string>
   webhook?: string
 }
 

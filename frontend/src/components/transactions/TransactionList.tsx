@@ -2,10 +2,12 @@
  * Transaction list component
  */
 import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import TransactionItem from './TransactionItem'
 import TransactionDetail from './TransactionDetail'
 import EmptyState from '@/components/common/EmptyState'
 import { Skeleton } from '@/components/common/LoadingSpinner'
+import { transactionService } from '@/services/transactionService'
 import type { Transaction } from '@/types/transaction.types'
 
 export interface TransactionListProps {
@@ -13,6 +15,7 @@ export interface TransactionListProps {
   isLoading?: boolean
   onTransactionClick?: (transaction: Transaction) => void
   onCategorize?: (transactionId: string, categoryId: string) => void
+  hideWrapper?: boolean
 }
 
 export default function TransactionList({
@@ -20,8 +23,25 @@ export default function TransactionList({
   isLoading,
   onTransactionClick,
   onCategorize,
+  hideWrapper = false,
 }: TransactionListProps) {
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null)
+  
+  // Fetch full transaction detail when a transaction is selected
+  const { data: transactionDetailResponse, isLoading: isLoadingDetail } = useQuery({
+    queryKey: ['transaction', selectedTransactionId],
+    queryFn: async () => {
+      if (!selectedTransactionId) return null
+      const response = await transactionService.getTransaction(selectedTransactionId)
+      if (response.status === 'success' && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to fetch transaction')
+    },
+    enabled: !!selectedTransactionId,
+  })
+  
+  const selectedTransaction = transactionDetailResponse || null
 
   const handleCategorize = (transactionId: string, categoryId: string) => {
     if (onCategorize) {
@@ -31,12 +51,13 @@ export default function TransactionList({
 
   // Update selected transaction when transactions list updates
   useEffect(() => {
-    if (selectedTransaction) {
+    if (selectedTransaction && selectedTransactionId) {
       const updated = transactions.find(
-        (t) => t.transaction_id === selectedTransaction.transaction_id
+        (t) => t.transaction_id === selectedTransactionId
       )
-      if (updated && JSON.stringify(updated) !== JSON.stringify(selectedTransaction)) {
-        setSelectedTransaction(updated)
+      if (updated) {
+        // If the list transaction is updated, we'll rely on the detail query to update
+        // The detail query will have the latest data
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -62,27 +83,35 @@ export default function TransactionList({
   }
 
   const handleClick = (transaction: Transaction) => {
-    setSelectedTransaction(transaction)
+    setSelectedTransactionId(transaction.transaction_id)
     onTransactionClick?.(transaction)
   }
 
-  return (
-    <>
-      <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
-        {transactions.map((transaction) => (
+  const transactionItems = transactions.map((transaction) => (
           <TransactionItem
             key={transaction.transaction_id}
             transaction={transaction}
             onClick={() => handleClick(transaction)}
           />
-        ))}
+  ))
+
+  return (
+    <>
+      {hideWrapper ? (
+        <div className="divide-y divide-gray-100">
+          {transactionItems}
+        </div>
+      ) : (
+        <div className="bg-white/30 rounded-lg border border-gray-200 divide-y divide-gray-100">
+          {transactionItems}
       </div>
+      )}
 
       {selectedTransaction && (
         <TransactionDetail
           transaction={selectedTransaction}
-          isOpen={!!selectedTransaction}
-          onClose={() => setSelectedTransaction(null)}
+          isOpen={!!selectedTransaction && !isLoadingDetail}
+          onClose={() => setSelectedTransactionId(null)}
           onCategorize={(categoryId) =>
             handleCategorize(selectedTransaction.transaction_id, categoryId)
           }

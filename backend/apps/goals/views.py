@@ -276,6 +276,34 @@ class GoalViewSet(viewsets.ModelViewSet):
         # Check transfer authorization feature access if goal has destination account
         destination_account_id = serializer.validated_data.get('destination_account')
         if destination_account_id:
+            # Validate that destination account is not a CD and is a valid depository account
+            try:
+                from apps.accounts.models import Account
+                destination_account = Account.objects.get(account_id=destination_account_id, user=request.user)
+                
+                # Check if destination account is a CD (Certificate of Deposit) - cannot be used
+                dest_name_lower = (destination_account.custom_name or destination_account.institution_name or '').lower()
+                if 'cd' in dest_name_lower or 'certificate of deposit' in dest_name_lower or 'certificate' in dest_name_lower:
+                    return Response({
+                        'status': 'error',
+                        'data': None,
+                        'message': 'Certificate of Deposit (CD) accounts cannot be used as destination accounts. Please select a checking or savings account.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Check if destination account is a depository account (checking or savings)
+                if destination_account.account_type not in ['checking', 'savings']:
+                    return Response({
+                        'status': 'error',
+                        'data': None,
+                        'message': f'Destination account must be a checking or savings account. Current type: {destination_account.get_account_type_display()}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            except Account.DoesNotExist:
+                return Response({
+                    'status': 'error',
+                    'data': None,
+                    'message': 'Destination account not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
             try:
                 from apps.subscriptions.limit_service import SubscriptionLimitService
                 from apps.subscriptions.exceptions import FeatureNotAvailable
@@ -333,6 +361,37 @@ class GoalViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
+        
+        # Validate destination account if being updated
+        destination_account_id = serializer.validated_data.get('destination_account')
+        if destination_account_id:
+            try:
+                from apps.accounts.models import Account
+                destination_account = Account.objects.get(account_id=destination_account_id, user=request.user)
+                
+                # Check if destination account is a CD (Certificate of Deposit) - cannot be used
+                dest_name_lower = (destination_account.custom_name or destination_account.institution_name or '').lower()
+                if 'cd' in dest_name_lower or 'certificate of deposit' in dest_name_lower or 'certificate' in dest_name_lower:
+                    return Response({
+                        'status': 'error',
+                        'data': None,
+                        'message': 'Certificate of Deposit (CD) accounts cannot be used as destination accounts. Please select a checking or savings account.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Check if destination account is a depository account (checking or savings)
+                if destination_account.account_type not in ['checking', 'savings']:
+                    return Response({
+                        'status': 'error',
+                        'data': None,
+                        'message': f'Destination account must be a checking or savings account. Current type: {destination_account.get_account_type_display()}'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            except Account.DoesNotExist:
+                return Response({
+                    'status': 'error',
+                    'data': None,
+                    'message': 'Destination account not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+        
         self.perform_update(serializer)
         
         # Use GoalSerializer for response to include all computed fields
@@ -619,6 +678,54 @@ class GoalViewSet(viewsets.ModelViewSet):
                 'message': 'Invalid source account configuration'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Validate that both source and destination accounts are depository accounts
+        # Plaid only allows transfers from/to checking or savings accounts (not CDs)
+        from apps.accounts.models import Account
+        
+        try:
+            source_account = Account.objects.get(account_id=source_account_id, user=request.user)
+            destination_account = goal.destination_account
+            
+            # Check if source account is a CD (Certificate of Deposit) - cannot be used for transfers
+            source_name_lower = (source_account.custom_name or source_account.institution_name or '').lower()
+            if 'cd' in source_name_lower or 'certificate of deposit' in source_name_lower or 'certificate' in source_name_lower:
+                return Response({
+                    'status': 'error',
+                    'data': None,
+                    'message': 'Certificate of Deposit (CD) accounts cannot be used for automatic transfers. Please select a checking or savings account.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if source account is a depository account (checking or savings)
+            if source_account.account_type not in ['checking', 'savings']:
+                return Response({
+                    'status': 'error',
+                    'data': None,
+                    'message': f'Source account must be a checking or savings account. Current type: {source_account.get_account_type_display()}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if destination account is a CD (Certificate of Deposit) - cannot be used for transfers
+            dest_name_lower = (destination_account.custom_name or destination_account.institution_name or '').lower()
+            if 'cd' in dest_name_lower or 'certificate of deposit' in dest_name_lower or 'certificate' in dest_name_lower:
+                return Response({
+                    'status': 'error',
+                    'data': None,
+                    'message': 'Certificate of Deposit (CD) accounts cannot be used for automatic transfers. Please select a checking or savings account.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check if destination account is a depository account (checking or savings)
+            if destination_account.account_type not in ['checking', 'savings']:
+                return Response({
+                    'status': 'error',
+                    'data': None,
+                    'message': f'Destination account must be a checking or savings account. Current type: {destination_account.get_account_type_display()}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        except Account.DoesNotExist:
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'Source account not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
         # Get transfer amount from contribution rule
         # Default to $1.00 for authorization (actual transfers can be different)
         transfer_amount = '1.00'
@@ -644,9 +751,8 @@ class GoalViewSet(viewsets.ModelViewSet):
                 goal_id=str(goal.goal_id)
             )
             
-            # Get source account to store authorized account ID
-            from apps.accounts.models import Account
-            source_account = Account.objects.get(account_id=source_account_id, user=request.user)
+            # Get source account to store authorized account ID (already fetched above)
+            # source_account is already available from validation above
             
             # Store the authorization for future use
             transfer_auth = TransferAuthorization.objects.create(
@@ -685,10 +791,20 @@ class GoalViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_200_OK)
             
         except PlaidIntegrationError as e:
+            # Extract message from ValidationError (which stores messages as a list)
+            # ValidationError.messages is a list, so we need to extract the first element
+            if hasattr(e, 'messages') and isinstance(e.messages, list) and len(e.messages) > 0:
+                error_message = e.messages[0]
+            elif hasattr(e, 'message'):
+                error_message = e.message
+            else:
+                # Fallback to string representation, but clean it up
+                error_message = str(e).strip("[]'\"")
+            
             return Response({
                 'status': 'error',
                 'data': None,
-                'message': f'Failed to create transfer authorization: {str(e)}'
+                'message': str(error_message)
             }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             import logging

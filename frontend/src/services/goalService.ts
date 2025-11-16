@@ -399,17 +399,28 @@ export const goalService = {
    * Authorize transfers for a goal - creates authorization programmatically (no Link UI)
    */
   async authorizeTransfers(goalId: string): Promise<ApiResponse<{ goal: Goal; authorization_id: string; decision?: string }>> {
-    const response = await api.post<ApiResponse<{ goal: Goal; authorization_id: string; decision?: string }>>(`/goals/${goalId}/authorize-transfers/`)
-    const responseData = response.data as unknown
-    
-    if (typeof responseData === 'object' && responseData !== null && 'status' in (responseData as Record<string, unknown>)) {
-      return responseData as ApiResponse<{ goal: Goal; authorization_id: string; decision?: string }>
-    }
-    
-    return {
-      status: 'error',
-      data: undefined as unknown as { goal: Goal; authorization_id: string; decision?: string },
-      message: 'Unexpected authorization response format',
+    try {
+      const response = await api.post<ApiResponse<{ goal: Goal; authorization_id: string; decision?: string }>>(`/goals/${goalId}/authorize-transfers/`)
+      const responseData = response.data as unknown
+      
+      if (typeof responseData === 'object' && responseData !== null && 'status' in (responseData as Record<string, unknown>)) {
+        return responseData as ApiResponse<{ goal: Goal; authorization_id: string; decision?: string }>
+      }
+      
+      return {
+        status: 'error',
+        data: undefined as unknown as { goal: Goal; authorization_id: string; decision?: string },
+        message: 'Unexpected authorization response format',
+      }
+    } catch (error: any) {
+      // Extract error message from Axios error response
+      if (error.response?.data?.message) {
+        throw new Error(error.response.data.message)
+      }
+      if (error.response?.data?.data?.message) {
+        throw new Error(error.response.data.data.message)
+      }
+      throw error
     }
   },
 

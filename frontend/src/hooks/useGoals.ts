@@ -13,6 +13,7 @@ import type {
   Contribution,
 } from '@/types/goal.types'
 import { toast } from 'sonner'
+import { triggerConfetti } from '@/utils/confetti'
 
 export function useGoals(isActive?: boolean, isCompleted?: boolean) {
   const queryClient = useQueryClient()
@@ -152,6 +153,8 @@ export function useGoals(isActive?: boolean, isCompleted?: boolean) {
       // Also update the specific goal in cache if it exists
       queryClient.setQueryData(['goals', goal.goal_id], goal)
       toast.success('Goal marked as completed')
+      // Trigger confetti celebration
+      triggerConfetti()
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to complete goal')
@@ -209,16 +212,64 @@ export function useGoals(isActive?: boolean, isCompleted?: boolean) {
       goalId: string
       contribution: ContributionCreateData
     }) => {
+      // Get the goal before adding contribution to check if it was already completed
+      // Check both individual goal cache and goals list cache
+      let previousGoal = queryClient.getQueryData<Goal>(['goals', goalId])
+      
+      // If not found in individual cache, try to find it in the goals list
+      if (!previousGoal) {
+        const goalsQueries = queryClient.getQueriesData<Goal[]>({ queryKey: ['goals'] })
+        for (const [, goals] of goalsQueries) {
+          if (goals && Array.isArray(goals)) {
+            const found = goals.find(g => g.goal_id === goalId)
+            if (found) {
+              previousGoal = found
+              break
+            }
+          }
+        }
+      }
+      
+      const previousIsCompleted = previousGoal?.is_completed || false
+      
       const response = await goalService.addContribution(goalId, contribution)
       if (response.status === 'success' && response.data) {
-        return response.data
+        return { contribution: response.data, previousIsCompleted, goalId }
       }
       throw new Error(response.message || 'Failed to contribute to goal')
     },
-    onSuccess: (_, variables) => {
+    onSuccess: async (data, variables) => {
+      const { previousIsCompleted, goalId } = data
+      
+      // Invalidate queries to refetch updated data
       queryClient.invalidateQueries({ queryKey: ['goals'] })
-      queryClient.invalidateQueries({ queryKey: ['goals', variables.goalId, 'contributions'] })
-      toast.success('Contribution recorded successfully')
+      queryClient.invalidateQueries({ queryKey: ['goals', goalId, 'contributions'] })
+      
+      // Refetch the goal to check if it's now completed
+      try {
+        const goalResponse = await goalService.getGoal(goalId)
+        if (goalResponse.status === 'success' && goalResponse.data) {
+          const updatedGoal = goalResponse.data
+          const isNowCompleted = updatedGoal.is_completed || false
+          
+          // Check if goal was just completed (wasn't completed before, is completed now)
+          if (!previousIsCompleted && isNowCompleted) {
+            // Goal was just completed through this contribution!
+            triggerConfetti()
+            toast.success('Goal completed! 🎉')
+          } else {
+            toast.success('Contribution recorded successfully')
+          }
+          
+          // Update the goal in cache
+          queryClient.setQueryData(['goals', goalId], updatedGoal)
+        } else {
+          toast.success('Contribution recorded successfully')
+        }
+      } catch (error) {
+        // If refetch fails, still show success for the contribution
+        toast.success('Contribution recorded successfully')
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to contribute to goal')
@@ -236,16 +287,63 @@ export function useGoals(isActive?: boolean, isCompleted?: boolean) {
       contributionId: string
       data: ContributionUpdateData
     }) => {
+      // Get the goal before updating contribution to check if it was already completed
+      let previousGoal = queryClient.getQueryData<Goal>(['goals', goalId])
+      
+      // If not found in individual cache, try to find it in the goals list
+      if (!previousGoal) {
+        const goalsQueries = queryClient.getQueriesData<Goal[]>({ queryKey: ['goals'] })
+        for (const [, goals] of goalsQueries) {
+          if (goals && Array.isArray(goals)) {
+            const found = goals.find(g => g.goal_id === goalId)
+            if (found) {
+              previousGoal = found
+              break
+            }
+          }
+        }
+      }
+      
+      const previousIsCompleted = previousGoal?.is_completed || false
+      
       const response = await goalService.updateContribution(goalId, contributionId, data)
       if (response.status === 'success' && response.data) {
-        return response.data
+        return { contribution: response.data, previousIsCompleted, goalId }
       }
       throw new Error(response.message || 'Failed to update contribution')
     },
-    onSuccess: (_, variables) => {
+    onSuccess: async (data, variables) => {
+      const { previousIsCompleted, goalId } = data
+      
+      // Invalidate queries to refetch updated data
       queryClient.invalidateQueries({ queryKey: ['goals'] })
-      queryClient.invalidateQueries({ queryKey: ['goals', variables.goalId, 'contributions'] })
-      toast.success('Contribution updated successfully')
+      queryClient.invalidateQueries({ queryKey: ['goals', goalId, 'contributions'] })
+      
+      // Refetch the goal to check if it's now completed
+      try {
+        const goalResponse = await goalService.getGoal(goalId)
+        if (goalResponse.status === 'success' && goalResponse.data) {
+          const updatedGoal = goalResponse.data
+          const isNowCompleted = updatedGoal.is_completed || false
+          
+          // Check if goal was just completed (wasn't completed before, is completed now)
+          if (!previousIsCompleted && isNowCompleted) {
+            // Goal was just completed through this contribution update!
+            triggerConfetti()
+            toast.success('Goal completed! 🎉')
+          } else {
+            toast.success('Contribution updated successfully')
+          }
+          
+          // Update the goal in cache
+          queryClient.setQueryData(['goals', goalId], updatedGoal)
+        } else {
+          toast.success('Contribution updated successfully')
+        }
+      } catch (error) {
+        // If refetch fails, still show success for the contribution update
+        toast.success('Contribution updated successfully')
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to update contribution')
