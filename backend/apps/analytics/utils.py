@@ -7,6 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from apps.accounts.models import Account
 from apps.transactions.models import Transaction
+from apps.transactions.serializers import TransactionFrontendSerializer
 from apps.goals.models import Goal
 
 
@@ -65,20 +66,13 @@ def get_recent_transactions(user, limit=15):
     Returns:
         list: List of transaction dictionaries
     """
-    transactions = Transaction.objects.for_user(user).recent(days=30)[:limit]
+    transactions = (
+        Transaction.objects.for_user(user)
+        .recent(days=30)
+        .select_related('account', 'category')[:limit]
+    )
     
-    return [
-        {
-            'transaction_id': str(txn.transaction_id),
-            'merchant_name': txn.merchant_name,
-            'amount': float(txn.amount),
-            'formatted_amount': f"${abs(txn.amount):,.2f}",
-            'date': txn.date.isoformat(),
-            'category_name': txn.category.name if txn.category else None,
-            'account_name': txn.account.institution_name,
-        }
-        for txn in transactions
-    ]
+    return TransactionFrontendSerializer(transactions, many=True).data
 
 
 def get_monthly_spending_summary(user, month=None, year=None):

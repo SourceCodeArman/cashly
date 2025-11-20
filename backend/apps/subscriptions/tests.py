@@ -1,7 +1,7 @@
 """
 Tests for subscriptions app.
 """
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
@@ -84,6 +84,15 @@ class SubscriptionViewTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['status'], 'success')
         self.assertIn('publishable_key', response.data['data'])
+
+    @override_settings(STRIPE_PUBLISHABLE_KEY='pk_test_123')
+    def test_subscription_config_endpoint(self):
+        """Test subscription config endpoint returns tier metadata."""
+        response = self.client.get('/api/v1/subscriptions/config/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'success')
+        self.assertIn('tiers', response.data['data'])
+        self.assertGreaterEqual(len(response.data['data']['tiers']), 3)
 
 
 class PendingSubscriptionTest(TestCase):

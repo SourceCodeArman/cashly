@@ -1,114 +1,77 @@
-/**
- * React hooks for notification management
- */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  getNotifications,
-  getNotification,
-  markAsRead,
-  markAllAsRead,
-  deleteNotification,
-  getUnreadCount,
-} from '@/services/notificationService'
-import type {
-  Notification,
-  NotificationFilters,
-} from '@/types/notification.types'
+import { notificationService } from '@/services/notificationService'
+import { queryKeys } from '@/lib/queryClient'
+import { toast } from 'sonner'
 
-/**
- * Get notifications with optional filters
- */
-export function useNotifications(filters?: NotificationFilters) {
-  return useQuery<Notification[]>({
-    queryKey: ['notifications', filters],
+export function useNotifications() {
+  return useQuery({
+    queryKey: queryKeys.notifications,
     queryFn: async () => {
-      const response = await getNotifications(filters)
-      if ('results' in response.data && Array.isArray(response.data.results)) {
-        return response.data.results
+      const response = await notificationService.listNotifications()
+      if (response.status === 'success' && response.data) {
+        return response.data
       }
-      return []
+      throw new Error(response.message || 'Failed to fetch notifications')
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
   })
 }
 
-/**
- * Get unread notifications
- */
-export function useUnreadNotifications() {
-  return useNotifications({ is_read: false })
-}
-
-/**
- * Get unread notification count
- */
 export function useUnreadCount() {
-  return useQuery<number>({
-    queryKey: ['notifications', 'unread-count'],
+  return useQuery({
+    queryKey: queryKeys.unreadCount,
     queryFn: async () => {
-      const response = await getUnreadCount()
-      return response.data.count
+      const response = await notificationService.getUnreadCount()
+      if (response.status === 'success' && response.data) {
+        return response.data.count
+      }
+      throw new Error(response.message || 'Failed to fetch unread count')
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
   })
 }
 
-/**
- * Get a single notification by ID
- */
-export function useNotification(id: string | null) {
-  return useQuery<Notification | null>({
-    queryKey: ['notification', id],
-    queryFn: async () => {
-      if (!id) return null
-      const response = await getNotification(id)
-      return response.data
-    },
-    enabled: !!id,
-  })
-}
-
-/**
- * Mark notification as read mutation
- */
-export function useMarkAsRead() {
+export function useMarkNotificationAsRead() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
-    mutationFn: (id: string) => markAsRead(id),
+    mutationFn: (id: string) => notificationService.markAsRead(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
+      queryClient.invalidateQueries({ queryKey: queryKeys.unreadCount })
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to mark notification as read')
     },
   })
 }
 
-/**
- * Mark all notifications as read mutation
- */
-export function useMarkAllAsRead() {
+export function useMarkAllNotificationsAsRead() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
-    mutationFn: () => markAllAsRead(),
+    mutationFn: () => notificationService.markAllAsRead(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
+      queryClient.invalidateQueries({ queryKey: queryKeys.unreadCount })
+      toast.success('All notifications marked as read')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to mark all notifications as read')
     },
   })
 }
 
-/**
- * Delete notification mutation
- */
 export function useDeleteNotification() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
-    mutationFn: (id: string) => deleteNotification(id),
+    mutationFn: (id: string) => notificationService.deleteNotification(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.notifications })
+      queryClient.invalidateQueries({ queryKey: queryKeys.unreadCount })
+      toast.success('Notification deleted')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to delete notification')
     },
   })
 }

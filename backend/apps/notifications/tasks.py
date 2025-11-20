@@ -156,3 +156,116 @@ def create_account_sync_notification(user, account_name, status, error_message=N
         }
     )
 
+
+def create_account_selection_required_notification(user, subscription, excess_count):
+    """
+    Create notification prompting user to select accounts when subscription is cancelled.
+    
+    Args:
+        user: User instance
+        subscription: Subscription instance being cancelled
+        excess_count: Number of accounts exceeding free tier limit
+    
+    Returns:
+        Notification instance
+    """
+    title = "Select Accounts to Keep"
+    message = (
+        f"Your subscription will end on {subscription.current_period_end.strftime('%B %d, %Y')}. "
+        f"You currently have {excess_count} account(s) exceeding the free tier limit of 3. "
+        "Please select which accounts you'd like to keep active."
+    )
+    
+    return create_notification(
+        user=user,
+        notification_type='system',
+        title=title,
+        message=message,
+        data={
+            'subscription_id': str(subscription.subscription_id),
+            'excess_count': excess_count,
+            'current_period_end': subscription.current_period_end.isoformat(),
+            'action_required': 'select_accounts',
+        }
+    )
+
+
+def create_account_deactivation_reminder_notification(user, accounts_to_deactivate, deactivation_date):
+    """
+    Create notification reminding user about upcoming account deactivation.
+    
+    Args:
+        user: User instance
+        accounts_to_deactivate: List of account names or count
+        deactivation_date: Date when accounts will be deactivated
+    
+    Returns:
+        Notification instance
+    """
+    if isinstance(accounts_to_deactivate, list):
+        account_count = len(accounts_to_deactivate)
+        account_names = ', '.join(accounts_to_deactivate[:3])
+        if account_count > 3:
+            account_names += f" and {account_count - 3} more"
+    else:
+        account_count = accounts_to_deactivate
+        account_names = f"{account_count} account(s)"
+    
+    title = "Account Deactivation Reminder"
+    message = (
+        f"{account_count} account(s) ({account_names}) will be deactivated on "
+        f"{deactivation_date.strftime('%B %d, %Y')} when your subscription ends. "
+        "You can still select which accounts to keep active."
+    )
+    
+    return create_notification(
+        user=user,
+        notification_type='account',
+        title=title,
+        message=message,
+        data={
+            'account_count': account_count,
+            'deactivation_date': deactivation_date.isoformat(),
+            'action_required': 'select_accounts',
+        }
+    )
+
+
+def create_account_deactivation_complete_notification(user, deactivated_accounts):
+    """
+    Create notification confirming account deactivation after subscription ends.
+    
+    Args:
+        user: User instance
+        deactivated_accounts: List of account names that were deactivated
+    
+    Returns:
+        Notification instance
+    """
+    if isinstance(deactivated_accounts, list):
+        account_count = len(deactivated_accounts)
+        account_names = ', '.join(deactivated_accounts[:3])
+        if account_count > 3:
+            account_names += f" and {account_count - 3} more"
+    else:
+        account_count = deactivated_accounts
+        account_names = f"{account_count} account(s)"
+    
+    title = "Accounts Deactivated"
+    message = (
+        f"{account_count} account(s) ({account_names}) have been deactivated "
+        "as part of your subscription downgrade to the free tier. "
+        "You can reactivate them anytime by upgrading your subscription."
+    )
+    
+    return create_notification(
+        user=user,
+        notification_type='account',
+        title=title,
+        message=message,
+        data={
+            'account_count': account_count,
+            'deactivated_accounts': deactivated_accounts if isinstance(deactivated_accounts, list) else [],
+        }
+    )
+

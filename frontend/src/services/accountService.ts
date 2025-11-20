@@ -1,204 +1,200 @@
-/**
- * Account service
- */
-import type { AxiosError } from 'axios'
+import apiClient from './apiClient'
+import type { ApiResponse, Account, PaginatedResponse, PlaidLinkTokenResponse } from '@/types'
 
-import api from './api'
-import type { ApiResponse } from '@/types/api.types'
-import type { Account, AccountConnectionData } from '@/types/account.types'
-import { getPlaidErrorMessage } from '@/utils/plaidErrors'
-
-interface LinkTokenParams {
-  products?: string[]
-  webhook?: string
-  access_token?: string
-  account_filters?: Record<string, string[]>
+export interface ConnectAccountResponse {
+  accounts_created: number
+  duplicates_skipped: number
+  accounts: Account[]
 }
 
-function handlePlaidError(error: AxiosError<ApiResponse<unknown>>): never {
-  const plaidError =
-    (error.response?.data?.errors && Object.keys(error.response.data.errors)[0]) ||
-    (error.response?.data?.data &&
-    typeof error.response.data.data === 'object' &&
-    error.response.data.data !== null &&
-    'error_code' in (error.response.data.data as Record<string, unknown>)
-      ? ((error.response.data.data as Record<string, unknown>).error_code as string)
-      : undefined)
+type AccountsApiShape =
+  | ApiResponse<Account[]>
+  | PaginatedResponse<Account>
+  | Account[]
 
-  const message =
-    getPlaidErrorMessage(plaidError) ||
-    error.response?.data?.message ||
-    error.message ||
-    'An unexpected error occurred'
+const isPaginatedResponse = (data: unknown): data is PaginatedResponse<Account> => {
+  return (
+    !!data &&
+    typeof data === 'object' &&
+    'results' in data &&
+    Array.isArray((data as PaginatedResponse<Account>).results)
+  )
+}
 
-  throw new Error(message)
+const isStandardApiResponse = (data: unknown): data is ApiResponse<Account[]> => {
+  return (
+    !!data &&
+    typeof data === 'object' &&
+    'status' in data &&
+    'data' in data &&
+    (data as ApiResponse<unknown>).status !== undefined
+  )
 }
 
 export const accountService = {
-  /**
-   * Create Plaid link token
-   */
-  async createLinkToken(params?: LinkTokenParams): Promise<ApiResponse<{ link_token: string }>> {
-    try {
-    const response = await api.post<ApiResponse<{ link_token: string }>>(
-        '/accounts/create-link-token/',
-        params ?? {}
-    )
-    return response.data
-    } catch (error) {
-      handlePlaidError(error as AxiosError<ApiResponse<unknown>>)
-    }
-  },
-
-  /**
-   * Connect account via Plaid
-   */
-  async connectAccount(data: AccountConnectionData): Promise<ApiResponse<Account[]>> {
-    try {
-      const response = await api.post<ApiResponse<{ accounts: Account[] }>>(
-        '/accounts/connect/',
-        data
-      )
-      return {
-        ...response.data,
-        data: response.data.data?.accounts ?? [],
-      }
-    } catch (error) {
-      handlePlaidError(error as AxiosError<ApiResponse<unknown>>)
-    }
-  },
-
-  /**
-   * Get user accounts
-   */
-  async getAccounts(): Promise<ApiResponse<Account[]>> {
-    const response = await api.get('/accounts/')
-    const data = response.data as unknown
-
-    // Handle our standard wrapped ApiResponse shape
-    if (
-      typeof data === 'object' &&
-      data !== null &&
-      'status' in (data as Record<string, unknown>)
-    ) {
-      return data as ApiResponse<Account[]>
-    }
-
-    // Gracefully handle DRF paginated response: { count, next, previous, results: [...] }
-    if (
-      typeof data === 'object' &&
-      data !== null &&
-      'results' in (data as Record<string, unknown>) &&
-      Array.isArray((data as { results: unknown }).results)
-    ) {
-      const results = (data as { results: Account[] }).results
-      return {
-        status: 'success',
-        data: results,
-        message: 'OK',
-      }
-    }
-
-    // Fallback to error shape
-    return {
-      status: 'error',
-      data: [],
-      message: 'Unexpected accounts response format',
-    }
-  },
-
-  /**
-   * Get account by ID
-   */
-  async getAccount(accountId: string): Promise<ApiResponse<Account>> {
-    const response = await api.get<ApiResponse<Account> | Account>(`/accounts/${accountId}/`)
-    const data = response.data as unknown
-    if (typeof data === 'object' && data !== null && 'status' in (data as Record<string, unknown>)) {
-      return data as ApiResponse<Account>
-    }
-    if (typeof data === 'object' && data !== null) {
-      return {
-        status: 'success',
-        data: data as Account,
-        message: 'OK',
-      }
-    }
-    return {
-      status: 'error',
-      data: undefined as unknown as Account,
-      message: 'Unexpected account response format',
-    }
-  },
-
-  /**
-   * Sync account transactions
-   */
-  async syncAccount(accountId: string): Promise<ApiResponse<{ account_id: string }>> {
-    const response = await api.post<ApiResponse<{ account_id: string }>>(
-      `/accounts/${accountId}/sync/`
+  async createLinkToken(): Promise<ApiResponse<PlaidLinkTokenResponse>> {
+    const response = await apiClient.post<ApiResponse<PlaidLinkTokenResponse>>(
+      '/accounts/create-link-token/'
     )
     return response.data
   },
 
-  /**
-   * Delete/disconnect account
-   */
-  async deleteAccount(accountId: string): Promise<ApiResponse<null>> {
-    const response = await api.delete<ApiResponse<null>>(`/accounts/${accountId}/`)
+  async connectAccount(params: {
+    publicToken: string
+    institutionId: string
+    institutionName?: string
+    selectedAccountIds: string[]
+  }): Promise<ApiResponse<ConnectAccountResponse>> {
+    const response = await apiClient.post<ApiResponse<ConnectAccountResponse>>('/accounts/connect/', {
+      public_token: params.publicToken,
+      institution_id: params.institutionId,
+      institution_name: params.institutionName,
+      selected_account_ids: params.selectedAccountIds,
+    })
     return response.data
   },
 
-  /**
-   * Disconnect Plaid item using explicit endpoint
-   */
-  async disconnectAccount(accountId: string): Promise<ApiResponse<{ account_id: string }>> {
-    try {
-      const response = await api.post<ApiResponse<{ account_id: string }>>(
-        `/accounts/${accountId}/disconnect/`
-      )
-      return response.data
-    } catch (error) {
-      handlePlaidError(error as AxiosError<ApiResponse<unknown>>)
+  async listAccounts(): Promise<Account[]> {
+    const response = await apiClient.get<AccountsApiShape>('/accounts/')
+    const payload = response.data
+
+    console.log('Raw accounts API response:', payload)
+
+    interface RawAccountData {
+      id?: string
+      account_id?: string
+      custom_name?: string
+      name?: string
+      institution_name?: string
+      institutionName?: string
+      account_type?: string
+      accountType?: string
+      account_number_masked?: string
+      maskedAccountNumber?: string
+      is_active?: boolean
+      isActive?: boolean
+      plaid_account_id?: string
+      plaidAccountId?: string
+      created_at?: string
+      createdAt?: string
+      updated_at?: string
+      updatedAt?: string
+      balance?: string
+      [key: string]: unknown
     }
+
+    let accounts: RawAccountData[] = []
+
+    if (Array.isArray(payload)) {
+      accounts = payload as unknown as RawAccountData[]
+    } else if (isPaginatedResponse(payload)) {
+      accounts = payload.results as unknown as RawAccountData[]
+    } else if (isStandardApiResponse(payload)) {
+      if (payload.status === 'success' && Array.isArray(payload.data)) {
+        accounts = payload.data as unknown as RawAccountData[]
+      } else {
+        throw new Error(payload.message || 'Failed to fetch accounts')
+      }
+    } else {
+      throw new Error('Unexpected accounts response format')
+    }
+
+    console.log('Extracted accounts array:', accounts)
+
+    // Transform snake_case backend fields to camelCase frontend fields
+    const transformed: Account[] = accounts
+      .map((account: RawAccountData) => {
+      const accountId = account.id || account.account_id
+      const customName = account.custom_name || account.name || null
+      const institutionName = account.institution_name || account.institutionName || ''
+        
+        // Ensure we have a valid ID - skip accounts without IDs
+        if (!accountId) {
+          console.error('Account missing ID after transformation:', account)
+          return null
+        }
+        
+        const result: Account = {
+          // Required fields with guaranteed values
+        id: accountId,
+          institutionName: institutionName || 'Unknown Institution',
+          accountType: account.account_type || account.accountType || 'unknown',
+          balance: account.balance || '0',
+        isActive: account.is_active !== undefined ? account.is_active : (account.isActive !== undefined ? account.isActive : true),
+          // Optional fields
+          name: customName || undefined,
+          maskedAccountNumber: account.account_number_masked || account.maskedAccountNumber || undefined,
+          plaidAccountId: account.plaid_account_id || account.plaidAccountId || undefined,
+          createdAt: account.created_at || account.createdAt || undefined,
+          updatedAt: account.updated_at || account.updatedAt || undefined,
+        }
+        
+        console.log(`Transformed account: account_id=${account.account_id}, id=${result.id}, custom_name=${account.custom_name}, institution_name=${account.institution_name}, name=${result.name}, institutionName=${result.institutionName}, maskedNumber=${result.maskedAccountNumber}, isActive=${result.isActive}`)
+      
+      return result
+    })
+      .filter((account): account is Account => account !== null)
+
+    console.log('Transformed accounts:', transformed)
+    return transformed
   },
 
-  /**
-   * Update account webhook
-   */
-  async updateAccountWebhook(
-    accountId: string,
-    webhook: string
-  ): Promise<ApiResponse<{ account_id: string; webhook: string }>> {
-    try {
-      const response = await api.post<ApiResponse<{ account_id: string; webhook: string }>>(
-        `/accounts/${accountId}/update-webhook/`,
-        { webhook }
-      )
-      return response.data
-    } catch (error) {
-      handlePlaidError(error as AxiosError<ApiResponse<unknown>>)
+  async getAccount(id: string): Promise<ApiResponse<Account>> {
+    const response = await apiClient.get<ApiResponse<Account>>(`/accounts/${id}/`)
+    if (response.data.status === 'success' && response.data.data) {
+      interface RawAccountData {
+        id?: string
+        account_id?: string
+        custom_name?: string
+        name?: string
+        institution_name?: string
+        institutionName?: string
+        account_type?: string
+        accountType?: string
+        account_number_masked?: string
+        maskedAccountNumber?: string
+        is_active?: boolean
+        isActive?: boolean
+        plaid_account_id?: string
+        plaidAccountId?: string
+        created_at?: string
+        createdAt?: string
+        updated_at?: string
+        updatedAt?: string
+        balance?: string
+        [key: string]: unknown
+      }
+      const account = response.data.data as RawAccountData
+      // Transform snake_case backend fields to camelCase frontend fields
+      response.data.data = {
+        ...account,
+        id: account.id || account.account_id,
+        name: account.custom_name || account.name || null,
+        institutionName: account.institution_name || account.institutionName || '',
+        accountType: account.account_type || account.accountType || '',
+        maskedAccountNumber: account.account_number_masked || account.maskedAccountNumber || '',
+        isActive: account.is_active !== undefined ? account.is_active : (account.isActive !== undefined ? account.isActive : true),
+        plaidAccountId: account.plaid_account_id || account.plaidAccountId,
+        createdAt: account.created_at || account.createdAt,
+        updatedAt: account.updated_at || account.updatedAt,
+      } as Account
     }
+    return response.data
   },
 
-  /**
-   * Retrieve Plaid products for an account
-   */
-  async getAccountProducts(accountId: string): Promise<string[]> {
-    const response = await this.getAccount(accountId)
-    if (response.status === 'success' && response.data) {
-      return response.data.plaid_products ?? []
-    }
-    return []
+  async updateAccount(id: string, data: Partial<Account>): Promise<ApiResponse<Account>> {
+    const response = await apiClient.patch<ApiResponse<Account>>(`/accounts/${id}/`, data)
+    return response.data
   },
 
-  /**
-   * Update account (e.g., custom_name)
-   */
-  async updateAccount(accountId: string, updates: Partial<Pick<Account, 'custom_name'>>): Promise<ApiResponse<Account>> {
-    const response = await api.patch<ApiResponse<Account>>(
-      `/accounts/${accountId}/`,
-      updates
-    )
+  async syncAccount(id: string): Promise<ApiResponse<null>> {
+    const response = await apiClient.post<ApiResponse<null>>(`/accounts/${id}/sync/`)
+    return response.data
+  },
+
+  async disconnectAccount(id: string): Promise<ApiResponse<null>> {
+    // Use DELETE endpoint to actually delete the account from the database
+    const response = await apiClient.delete<ApiResponse<null>>(`/accounts/${id}/`)
     return response.data
   },
 }

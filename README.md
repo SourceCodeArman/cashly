@@ -122,20 +122,21 @@ The frontend will be available at `http://localhost:5173` (or the port Vite assi
 1. Create a Stripe account at [https://stripe.com](https://stripe.com)
 2. Get your API keys from the Stripe Dashboard → Developers → API keys
 3. Create products and prices in Stripe Dashboard:
-   - Premium Monthly
-   - Premium Annual
-   - Pro Monthly
-   - Pro Annual
+   - Premium Monthly & Annual
+   - Pro Monthly & Annual
 4. Copy the Price IDs and add them to your `backend/.env` file
-5. Set up webhooks in Stripe Dashboard:
-   - Endpoint URL: `https://your-domain.com/api/v1/subscriptions/webhook/`
-   - Events to listen: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded`, `invoice.payment_failed`
-6. Copy the webhook signing secret to your `backend/.env` file as `STRIPE_WEBHOOK_SECRET`
-7. Run the management command to sync products:
+5. Run the management command to sync products (optional helper that prints the IDs for you):
 ```bash
 cd backend
 python manage.py create_stripe_products
 ```
+6. Set up webhooks in Stripe Dashboard **or** use the Stripe CLI during development:
+   - Endpoint URL: `https://your-domain.com/api/v1/subscriptions/webhooks/` (production)
+   - Local testing: `stripe listen --forward-to localhost:8000/api/v1/subscriptions/webhooks/`
+   - Events: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded`, `invoice.payment_failed`, `customer.subscription.trial_will_end`
+7. Copy the webhook signing secret to your `backend/.env` file (`STRIPE_WEBHOOK_SECRET`). The Stripe CLI prints a secret each time you run `stripe listen`.
+8. Add your **publishable** key to `frontend/.env` as `VITE_STRIPE_PUBLISHABLE_KEY` so the upgrade dialog can render Stripe Elements.
+9. Use Stripe test cards (e.g., `4242 4242 4242 4242`) to walk through the entire subscription upgrade/cancellation flow in the app.
 
 ### Docker Setup
 
@@ -196,10 +197,15 @@ Key environment variables for `backend/.env`:
 - `STRIPE_SECRET_KEY`: Stripe secret key (get from https://dashboard.stripe.com/apikeys)
 - `STRIPE_PUBLISHABLE_KEY`: Stripe publishable key (for frontend)
 - `STRIPE_WEBHOOK_SECRET`: Webhook signing secret for Stripe webhook verification
-- `STRIPE_PRICE_ID_PREMIUM_MONTHLY`: Stripe price ID for premium monthly plan
-- `STRIPE_PRICE_ID_PREMIUM_ANNUAL`: Stripe price ID for premium annual plan
-- `STRIPE_PRICE_ID_PRO_MONTHLY`: Stripe price ID for pro monthly plan
-- `STRIPE_PRICE_ID_PRO_ANNUAL`: Stripe price ID for pro annual plan
+- `STRIPE_PREMIUM_MONTHLY_PRICE_ID`: Stripe price ID for the Premium ($19.99/mo) plan
+- `STRIPE_PREMIUM_ANNUAL_PRICE_ID`: Stripe price ID for Premium billed annually (optional, defaults to monthly ID)
+- `STRIPE_PRO_MONTHLY_PRICE_ID`: Stripe price ID for the Pro ($9.99/mo) plan
+- `STRIPE_PRO_ANNUAL_PRICE_ID`: Stripe price ID for Pro billed annually (optional, defaults to monthly ID)
+
+**Subscription Tiers (Default Features):**
+- **Free** (`price_id = free`): Up to 3 connected accounts, basic transaction tracking, monthly spending reports, and mobile app access.
+- **Pro** (`price_id = price_1SU4sS9FH3KQIIeTUG3QLP7T`): Unlimited accounts, advanced analytics & insights, custom categories/budgets, goal forecasting, priority support, and CSV/PDF exports.
+- **Premium** (`price_id = price_1SU4th9FH3KQIIeT32lJfeW2`): Everything in Pro plus AI-powered insights, investment tracking, tax optimization guidance, dedicated account manager, custom integrations, and advanced security features.
 
 **Celery/Redis:**
 - `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`: Redis connection URLs for Celery
@@ -282,13 +288,13 @@ cashly/
 - `GET /api/v1/goals/:id/forecast` - Get goal forecast
 
 ### Subscriptions
-- `GET /api/v1/subscriptions/config` - Get Stripe configuration
+- `GET /api/v1/subscriptions/config/` - Get publishable key + tier metadata for the frontend
 - `GET /api/v1/subscriptions/` - List user subscriptions
-- `POST /api/v1/subscriptions/` - Create subscription
-- `GET /api/v1/subscriptions/:id` - Get subscription details
-- `PATCH /api/v1/subscriptions/:id` - Update subscription
-- `POST /api/v1/subscriptions/:id/cancel` - Cancel subscription
-- `POST /api/v1/subscriptions/webhook` - Stripe webhook endpoint
+- `GET /api/v1/subscriptions/:id/` - Get subscription details
+- `PATCH /api/v1/subscriptions/:id/` - Update subscription metadata (server-side)
+- `POST /api/v1/subscriptions/create/` - Create or upgrade a subscription (Stripe payment flow)
+- `PATCH /api/v1/subscriptions/:id/cancel/` - Cancel subscription at the end of the current period
+- `POST /api/v1/subscriptions/webhooks/` - Stripe webhook endpoint
 
 ### Notifications
 - `GET /api/v1/notifications/` - List notifications

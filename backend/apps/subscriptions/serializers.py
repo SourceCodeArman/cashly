@@ -16,7 +16,7 @@ class CreateSubscriptionSerializer(serializers.Serializer):
         help_text="Stripe Payment Method ID"
     )
     plan = serializers.ChoiceField(
-        choices=['premium', 'pro'],
+        choices=['premium', 'pro', 'enterprise'],
         help_text="Subscription plan"
     )
     billing_cycle = serializers.ChoiceField(
@@ -75,6 +75,11 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'trial_end',
             'cancel_at_period_end',
             'canceled_at',
+            'pending_plan',
+            'pending_billing_cycle',
+            'pending_price_id_monthly',
+            'pending_price_id_annual',
+            'pending_requested_at',
             'created_at',
             'updated_at',
         ]
@@ -88,6 +93,11 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'trial_start',
             'trial_end',
             'canceled_at',
+            'pending_plan',
+            'pending_billing_cycle',
+            'pending_price_id_monthly',
+            'pending_price_id_annual',
+            'pending_requested_at',
             'created_at',
             'updated_at',
         ]
@@ -125,5 +135,59 @@ class PendingSubscriptionSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
+
+class UpdatePaymentMethodSerializer(serializers.Serializer):
+    """Serializer for updating default payment method."""
+    payment_method_id = serializers.CharField(
+        required=True,
+        help_text="Stripe payment method ID"
+    )
+
+
+class AccountSelectionSerializer(serializers.Serializer):
+    """Serializer for selecting accounts to keep during subscription downgrade."""
+    account_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=True,
+        help_text="List of account UUIDs to keep active (max 3 for free tier)"
+    )
+    
+    def validate_account_ids(self, value):
+        """Validate account IDs."""
+        if not value:
+            raise serializers.ValidationError("At least one account must be selected.")
+        
+        if len(value) > 3:
+            raise serializers.ValidationError("Free tier allows a maximum of 3 accounts.")
+        
+        # Check for duplicates
+        if len(value) != len(set(value)):
+            raise serializers.ValidationError("Duplicate account IDs are not allowed.")
+        
+        return value
+    
+    def validate(self, attrs):
+        """Validate that all accounts belong to the user."""
+        user = self.context['request'].user
+        account_ids = attrs.get('account_ids', [])
+        
+        # Import here to avoid circular dependency
+        from apps.accounts.models import Account
+        
+        # Get user's account IDs
+        user_account_ids = set(
+            Account.objects.for_user(user).values_list('account_id', flat=True)
+        )
+        
+        # Check all provided account IDs belong to user
+        invalid_ids = set(account_ids) - user_account_ids
+        if invalid_ids:
+            raise serializers.ValidationError(
+                f"Invalid account IDs: {', '.join(str(id) for id in invalid_ids)}. "
+                "All accounts must belong to you."
+            )
+        
+        return attrs
 
 

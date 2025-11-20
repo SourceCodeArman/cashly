@@ -28,6 +28,92 @@ class TransactionListSerializer(serializers.ModelSerializer):
         return f"${abs(obj.amount):,.2f}"
 
 
+class TransactionFrontendSerializer(serializers.ModelSerializer):
+    """Serializer that matches the frontend Transaction type contract."""
+
+    id = serializers.UUIDField(source='transaction_id', read_only=True)
+    merchantName = serializers.CharField(source='merchant_name', read_only=True)
+    description = serializers.CharField(read_only=True, allow_blank=True)
+    amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        coerce_to_string=True,
+        read_only=True
+    )
+    formattedAmount = serializers.SerializerMethodField()
+    date = serializers.DateField(read_only=True)
+    type = serializers.SerializerMethodField()
+    category = serializers.SerializerMethodField()
+    account = serializers.SerializerMethodField()
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+    isRecurring = serializers.BooleanField(source='is_recurring', read_only=True)
+    isTransfer = serializers.BooleanField(source='is_transfer', read_only=True)
+    userModified = serializers.BooleanField(source='user_modified', read_only=True)
+
+    class Meta:
+        model = Transaction
+        fields = (
+            'id',
+            'merchantName',
+            'description',
+            'amount',
+            'formattedAmount',
+            'date',
+            'type',
+            'category',
+            'account',
+            'createdAt',
+            'updatedAt',
+            'isRecurring',
+            'isTransfer',
+            'userModified',
+            'notes',
+            'tags',
+        )
+        read_only_fields = fields
+
+    def get_formattedAmount(self, obj):
+        """Return a currency formatted absolute amount."""
+        return f"${abs(obj.amount):,.2f}"
+
+    def get_type(self, obj):
+        """Derive transaction type from amount if not explicitly set."""
+        if obj.amount > 0:
+            return 'income'
+        if obj.amount < 0:
+            return 'expense'
+        return 'transfer'
+
+    def get_category(self, obj):
+        """Return nested category data when available."""
+        if not obj.category:
+            return None
+        category = obj.category
+        return {
+            'id': str(category.category_id),
+            'name': category.name,
+            'type': category.type,
+            'icon': category.icon,
+            'color': category.color,
+            'isSystemCategory': category.is_system_category,
+        }
+
+    def get_account(self, obj):
+        """Return nested account summary."""
+        if not obj.account:
+            return None
+        account = obj.account
+        return {
+            'id': str(account.account_id),
+            'name': account.custom_name or account.institution_name,
+            'institutionName': account.institution_name,
+            'accountType': account.account_type,
+            'maskedAccountNumber': account.account_number_masked,
+            'isActive': account.is_active,
+        }
+
+
 class TransactionDetailSerializer(serializers.ModelSerializer):
     """Serializer for transaction detail view."""
     formatted_amount = serializers.SerializerMethodField()
@@ -103,16 +189,35 @@ class TransactionCategorizeSerializer(serializers.Serializer):
 
 class CategorySerializer(serializers.ModelSerializer):
     """Serializer for Category model."""
+    id = serializers.UUIDField(source='category_id', read_only=True)
     parent_category_name = serializers.CharField(source='parent_category.name', read_only=True)
+    isSystemCategory = serializers.BooleanField(source='is_system_category', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+    subcategories = serializers.SerializerMethodField()
     
     class Meta:
         model = Category
         fields = (
-            'category_id', 'name', 'type', 'icon', 'color',
-            'is_system_category', 'parent_category', 'parent_category_name',
-            'created_at', 'updated_at'
+            'id', 'category_id', 'name', 'type', 'icon', 'color',
+            'isSystemCategory', 'is_system_category', 'parent_category', 'parent_category_name',
+            'subcategories', 'createdAt', 'updatedAt', 'created_at', 'updated_at'
         )
-        read_only_fields = ('category_id', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'category_id', 'createdAt', 'updatedAt', 'created_at', 'updated_at')
+    
+    def get_subcategories(self, obj):
+        """Return subcategories if this is a parent category."""
+        if obj.subcategories.exists():
+            # Avoid infinite recursion by using a simple serializer for subcategories
+            return [{
+                'id': str(sub.category_id),
+                'name': sub.name,
+                'type': sub.type,
+                'icon': sub.icon,
+                'color': sub.color,
+                'isSystemCategory': sub.is_system_category,
+            } for sub in obj.subcategories.all()]
+        return []
 
 
 class CategoryCreateSerializer(serializers.ModelSerializer):
@@ -134,4 +239,19 @@ class CategorySuggestionSerializer(serializers.Serializer):
     category_name = serializers.CharField()
     confidence_score = serializers.FloatField(min_value=0.0, max_value=1.0)
     reasoning = serializers.CharField(required=False, allow_blank=True)
+
+
+class TransactionStatsSerializer(serializers.Serializer):
+    """Serializer to align stats response with frontend expectations."""
+
+    totalSpending = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True
+    )
+    totalIncome = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True
+    )
+    totalTransactions = serializers.IntegerField()
+    net = serializers.DecimalField(
+        max_digits=12, decimal_places=2, coerce_to_string=True
+    )
 

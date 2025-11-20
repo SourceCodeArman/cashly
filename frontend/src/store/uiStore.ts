@@ -1,71 +1,65 @@
-/**
- * UI store using Zustand
- */
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+
+type Theme = 'light' | 'dark'
 
 interface UIState {
   sidebarOpen: boolean
-  theme: 'light' | 'dark'
-  notifications: Array<{
-    id: string
-    message: string
-    type: 'success' | 'error' | 'warning' | 'info'
-    timestamp: number
-  }>
+  theme: Theme
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
-  setTheme: (theme: 'light' | 'dark') => void
-  addNotification: (message: string, type: UIState['notifications'][0]['type']) => void
-  removeNotification: (id: string) => void
-  clearNotifications: () => void
+  setTheme: (theme: Theme) => void
+  toggleTheme: () => void
 }
 
-export const uiStore = create<UIState>((set) => ({
-  sidebarOpen: false,
-  theme: 'light',
-  notifications: [],
-  
-  toggleSidebar: () => {
-    set((state) => ({ sidebarOpen: !state.sidebarOpen }))
-  },
-  
-  setSidebarOpen: (open: boolean) => {
-    set({ sidebarOpen: open })
-  },
-  
-  setTheme: (theme: 'light' | 'dark') => {
-    set({ theme })
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-  },
-  
-  addNotification: (message: string, type: UIState['notifications'][0]['type']) => {
-    const notification = {
-      id: Date.now().toString(),
-      message,
-      type,
-      timestamp: Date.now(),
+export const useUIStore = create<UIState>()(
+  persist(
+    (set) => ({
+      sidebarOpen: true,
+      theme: 'light',
+
+      toggleSidebar: () => {
+        set((state) => ({ sidebarOpen: !state.sidebarOpen }))
+      },
+
+      setSidebarOpen: (open) => {
+        set({ sidebarOpen: open })
+      },
+
+      setTheme: (theme) => {
+        set({ theme })
+        // Apply theme to document
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark')
+        } else {
+          document.documentElement.classList.remove('dark')
+        }
+      },
+
+      toggleTheme: () => {
+        set((state) => {
+          const newTheme = state.theme === 'light' ? 'dark' : 'light'
+          // Apply theme to document
+          if (newTheme === 'dark') {
+            document.documentElement.classList.add('dark')
+          } else {
+            document.documentElement.classList.remove('dark')
+          }
+          return { theme: newTheme }
+        })
+      },
+    }),
+    {
+      name: 'cashly-ui',
+      onRehydrateStorage: () => (state) => {
+        // Apply theme on rehydrate
+        if (state?.theme === 'dark') {
+          document.documentElement.classList.add('dark')
+        } else {
+          document.documentElement.classList.remove('dark')
+        }
+      },
     }
-    
-    set((state) => ({
-      notifications: [...state.notifications, notification],
-    }))
-    
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-      set((state) => ({
-        notifications: state.notifications.filter((n) => n.id !== notification.id),
-      }))
-    }, 5000)
-  },
-  
-  removeNotification: (id: string) => {
-    set((state) => ({
-      notifications: state.notifications.filter((n) => n.id !== id),
-    }))
-  },
-  
-  clearNotifications: () => {
-    set({ notifications: [] })
-  },
-}))
+  )
+)
 

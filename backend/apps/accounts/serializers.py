@@ -81,6 +81,7 @@ class UserLoginSerializer(TokenObtainPairSerializer):
                     'id': user.id,
                     'email': user.email,
                     'username': user.username,
+                    'is_superuser': user.is_superuser,
                 }
             }
         else:
@@ -89,15 +90,28 @@ class UserLoginSerializer(TokenObtainPairSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     """Serializer for user profile data."""
+    firstName = serializers.CharField(source='first_name', read_only=True)
+    lastName = serializers.CharField(source='last_name', read_only=True)
+    phoneNumber = serializers.CharField(source='phone_number', read_only=True)
+    subscriptionTier = serializers.CharField(source='subscription_tier', read_only=True)
+    subscriptionStatus = serializers.CharField(source='subscription_status', read_only=True)
+    subscriptionEndDate = serializers.DateTimeField(source='subscription_end_date', read_only=True)
+    stripeCustomerId = serializers.CharField(source='stripe_customer_id', read_only=True)
+    mfaEnabled = serializers.BooleanField(source='mfa_enabled', read_only=True)
+    tourDone = serializers.BooleanField(source='tour_done', read_only=True)
+    isSuperuser = serializers.BooleanField(source='is_superuser', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+    
     class Meta:
         model = User
         fields = (
-            'id', 'email', 'username', 'first_name', 'last_name', 'phone_number',
-            'subscription_tier', 'subscription_status', 'subscription_end_date',
-            'stripe_customer_id', 'mfa_enabled', 'preferences', 'tour_done',
-            'created_at', 'updated_at'
+            'id', 'email', 'username', 'firstName', 'lastName', 'phoneNumber',
+            'subscriptionTier', 'subscriptionStatus', 'subscriptionEndDate',
+            'stripeCustomerId', 'mfaEnabled', 'preferences', 'tourDone',
+            'isSuperuser', 'createdAt', 'updatedAt'
         )
-        read_only_fields = ('id', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'isSuperuser', 'createdAt', 'updatedAt')
 
 
 class PasswordResetSerializer(serializers.Serializer):

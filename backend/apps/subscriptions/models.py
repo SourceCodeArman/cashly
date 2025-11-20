@@ -61,6 +61,7 @@ class Subscription(models.Model):
     PLAN_CHOICES = [
         ('premium', 'Premium'),
         ('pro', 'Pro'),
+        ('enterprise', 'Enterprise'),
     ]
     
     BILLING_CYCLE_CHOICES = [
@@ -129,6 +130,37 @@ class Subscription(models.Model):
         null=True,
         blank=True,
         help_text="Date when subscription was canceled"
+    )
+    pending_plan = models.CharField(
+        max_length=20,
+        choices=PLAN_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Pending plan to apply at next renewal"
+    )
+    pending_billing_cycle = models.CharField(
+        max_length=20,
+        choices=BILLING_CYCLE_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Pending billing cycle to apply at next renewal"
+    )
+    pending_price_id_monthly = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Monthly price ID for pending plan change"
+    )
+    pending_price_id_annual = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Annual price ID for pending plan change"
+    )
+    pending_requested_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the pending plan change was requested"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -208,6 +240,7 @@ class PendingSubscription(models.Model):
     PLAN_CHOICES = [
         ('premium', 'Premium'),
         ('pro', 'Pro'),
+        ('enterprise', 'Enterprise'),
     ]
     
     BILLING_CYCLE_CHOICES = [
@@ -312,5 +345,57 @@ class StripeWebhookEvent(models.Model):
     
     def __str__(self):
         return f"{self.event_type} ({self.stripe_event_id})"
+
+
+class AccountDowngradeSelection(models.Model):
+    """
+    Model for tracking which accounts users want to keep when downgrading from Pro/Premium to Free.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    subscription = models.ForeignKey(
+        Subscription,
+        on_delete=models.CASCADE,
+        related_name='account_downgrade_selections',
+        help_text="Subscription being cancelled"
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='account_downgrade_selections',
+        help_text="User making the selection"
+    )
+    accounts_to_keep = models.JSONField(
+        default=list,
+        help_text="List of account UUIDs to keep active (max 3 for free tier)"
+    )
+    selection_completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When user completed account selection"
+    )
+    deactivation_scheduled_at = models.DateTimeField(
+        help_text="When excess accounts should be deactivated (subscription period end)"
+    )
+    deactivation_completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When excess accounts were actually deactivated"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'account_downgrade_selections'
+        verbose_name = 'Account Downgrade Selection'
+        verbose_name_plural = 'Account Downgrade Selections'
+        indexes = [
+            models.Index(fields=['subscription', 'user']),
+            models.Index(fields=['deactivation_scheduled_at', 'deactivation_completed_at']),
+            models.Index(fields=['user', 'selection_completed_at']),
+        ]
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.user.email} - {len(self.accounts_to_keep)} accounts selected"
 
 

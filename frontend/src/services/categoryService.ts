@@ -1,115 +1,75 @@
-/**
- * Category service
- */
-import api from './api'
-import type { ApiResponse, PaginatedResponse } from '@/types/api.types'
-import type { Category } from '@/types/category.types'
+import apiClient from './apiClient'
+import type { ApiResponse, Category, CreateCategoryForm } from '@/types'
+
+interface RawCategoryData {
+  id?: string
+  category_id?: string
+  name?: string
+  icon?: string
+  color?: string
+  type?: 'income' | 'expense' | 'transfer'
+  isSystemCategory?: boolean
+  is_system_category?: boolean
+  parent_category?: RawCategoryData | null
+  parent_category_name?: string
+  parentCategoryName?: string
+  subcategories?: RawCategoryData[]
+  created_at?: string
+  createdAt?: string
+  updated_at?: string
+  updatedAt?: string
+  [key: string]: unknown
+}
+
+
+const normalizeCategory = (category: RawCategoryData): Category => ({
+  id: category.id ?? category.category_id ?? '',
+  name: category.name ?? '',
+  icon: category.icon,
+  color: category.color,
+  type: (category.type ?? 'expense') as 'income' | 'expense' | 'transfer',
+  isSystemCategory: category.isSystemCategory ?? category.is_system_category ?? false,
+  parentCategoryName: category.parent_category_name ?? category.parentCategoryName,
+  parent_category: category.parent_category ? normalizeCategory(category.parent_category) : undefined,
+  subcategories: category.subcategories?.map(normalizeCategory),
+  createdAt: category.created_at ?? category.createdAt,
+  updatedAt: category.updated_at ?? category.updatedAt,
+})
 
 export const categoryService = {
-  /**
-   * Get categories with optional filtering
-   * Handles pagination to fetch all categories
-   */
-  async getCategories(filters?: { type?: 'income' | 'expense' | 'transfer' }): Promise<ApiResponse<Category[]>> {
-    const params = new URLSearchParams()
-    
-    if (filters?.type) {
-      params.append('type', filters.type)
+  async listCategories(parentOnly = false): Promise<ApiResponse<Category[]>> {
+    const params = parentOnly ? { parent_only: 'true' } : {}
+    const response = await apiClient.get<ApiResponse<Category[]>>('/transactions/categories/', { params })
+    if (response.data.status === 'success' && Array.isArray(response.data.data)) {
+      response.data.data = response.data.data.map((cat) =>
+        normalizeCategory(cat as unknown as RawCategoryData)
+      )
     }
-    
-    const queryString = params.toString()
-    const baseUrl = queryString 
-      ? `/transactions/categories/?${queryString}`
-      : '/transactions/categories/'
-    
-    // Fetch first page
-    const response = await api.get<PaginatedResponse<Category>>(baseUrl)
-    const data = response.data as unknown
-    
-    // Handle paginated response from DRF
-    if (typeof data === 'object' && data !== null && 'results' in (data as Record<string, unknown>)) {
-      const paginatedData = data as PaginatedResponse<Category>
-      let allCategories = [...paginatedData.results]
-      
-      // Fetch remaining pages if there are more
-      let nextUrl = paginatedData.next
-      while (nextUrl) {
-        try {
-          // Extract the path from the full URL (remove domain, keep path + query)
-          const url = new URL(nextUrl)
-          const pathWithQuery = url.pathname + url.search
-          
-          const nextResponse = await api.get<PaginatedResponse<Category>>(pathWithQuery)
-          const nextData = nextResponse.data as unknown
-          
-          if (typeof nextData === 'object' && nextData !== null && 'results' in (nextData as Record<string, unknown>)) {
-            const nextPaginated = nextData as PaginatedResponse<Category>
-            allCategories = [...allCategories, ...nextPaginated.results]
-            nextUrl = nextPaginated.next
-          } else {
-            break
-          }
-        } catch (error) {
-          console.error('Error fetching additional category pages:', error)
-          break
-        }
-      }
-      
-      return {
-        status: 'success',
-        data: allCategories,
-        message: 'OK',
-      }
-    }
-    
-    // If already wrapped in ApiResponse (shouldn't happen with DRF, but handle it)
-    if (typeof data === 'object' && data !== null && 'status' in (data as Record<string, unknown>)) {
-      const apiResponse = data as ApiResponse<Category[]>
-      return apiResponse
-    }
-    
-    // Fallback: if it's an array (shouldn't happen with pagination enabled)
-    if (Array.isArray(data)) {
-      return {
-        status: 'success',
-        data: data as Category[],
-        message: 'OK',
-      }
-    }
-    
-    return {
-      status: 'error',
-      data: [],
-      message: 'Unexpected categories response format',
-    }
+    return response.data
   },
 
-  /**
-   * Get category by ID
-   */
-  async getCategory(categoryId: string): Promise<ApiResponse<Category>> {
-    const response = await api.get<ApiResponse<Category> | Category>(
-      `/transactions/categories/${categoryId}/`
+  async createCategory(data: CreateCategoryForm): Promise<ApiResponse<Category>> {
+    const response = await apiClient.post<ApiResponse<Category>>('/transactions/categories/', data)
+    if (response.data.status === 'success' && response.data.data) {
+      response.data.data = normalizeCategory(response.data.data as unknown as RawCategoryData)
+    }
+    return response.data
+  },
+
+  async updateCategory(id: string, data: Partial<CreateCategoryForm>): Promise<ApiResponse<Category>> {
+    const response = await apiClient.patch<ApiResponse<Category>>(
+      `/transactions/categories/${id}/`,
+      data
     )
-    const data = response.data as unknown
-    
-    if (typeof data === 'object' && data !== null && 'status' in (data as Record<string, unknown>)) {
-      return data as ApiResponse<Category>
+    if (response.data.status === 'success' && response.data.data) {
+      response.data.data = normalizeCategory(response.data.data as unknown as RawCategoryData)
     }
-    
-    if (typeof data === 'object' && data !== null) {
-      return {
-        status: 'success',
-        data: data as Category,
-        message: 'OK',
-      }
-    }
-    
-    return {
-      status: 'error',
-      data: undefined as unknown as Category,
-      message: 'Unexpected category response format',
-    }
+    return response.data
+  },
+
+  async deleteCategory(id: string): Promise<ApiResponse<null>> {
+    const response = await apiClient.delete<ApiResponse<null>>(`/transactions/categories/${id}/`)
+    return response.data
   },
 }
 

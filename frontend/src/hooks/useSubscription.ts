@@ -1,144 +1,206 @@
-/**
- * React hooks for subscription management
- */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  getSubscriptions,
-  getSubscription,
-  createSubscription,
-  updateSubscription,
-  cancelSubscription,
-  getStripeConfig,
-} from '@/services/subscriptionService'
+import { subscriptionService } from '@/services/subscriptionService'
 import type {
-  Subscription,
-  CreateSubscriptionData,
-  StripeConfig,
-} from '@/types/subscription.types'
+  CreateSubscriptionRequest,
+  SubscriptionWithClientSecret,
+  PaymentMethodSummary,
+} from '@/services/subscriptionService'
+import { queryKeys } from '@/lib/queryClient'
+import { toast } from 'sonner'
 
-/**
- * Get Stripe configuration
- */
-export function useStripeConfig() {
-  return useQuery<StripeConfig>({
-    queryKey: ['stripe-config'],
+export function useSubscriptionConfig() {
+  return useQuery({
+    queryKey: queryKeys.subscriptionConfig,
     queryFn: async () => {
-      const response = await getStripeConfig()
-      return response.data
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  })
-}
-
-/**
- * Get all subscriptions for the current user
- */
-export function useSubscriptions() {
-  return useQuery<Subscription[]>({
-    queryKey: ['subscriptions'],
-    queryFn: async () => {
-      const response = await getSubscriptions()
-      if (Array.isArray(response.data)) {
+      const response = await subscriptionService.getSubscriptionConfig()
+      if (response.status === 'success' && response.data) {
         return response.data
       }
-      if ('results' in response.data && Array.isArray(response.data.results)) {
-        return response.data.results
-      }
-      return []
+      throw new Error(response.message || 'Failed to fetch subscription config')
     },
   })
 }
 
-/**
- * Get current active subscription
- */
-export function useCurrentSubscription() {
-  const { data: subscriptions, ...rest } = useSubscriptions()
-  
-  const currentSubscription = subscriptions?.find(
-    (sub) => sub.status === 'active' || sub.status === 'trialing'
-  )
-  
-  return {
-    currentSubscription: currentSubscription || null,
-    isLoadingSubscriptions: rest.isLoading,
-    ...rest,
-  }
-}
-
-/**
- * Get a single subscription by ID
- */
-export function useSubscriptionById(subscriptionId: string | null) {
-  return useQuery<Subscription | null>({
-    queryKey: ['subscription', subscriptionId],
+export function useSubscriptions() {
+  return useQuery({
+    queryKey: queryKeys.subscriptions,
     queryFn: async () => {
-      if (!subscriptionId) return null
-      const response = await getSubscription(subscriptionId)
-      return response.data
+      const response = await subscriptionService.listSubscriptions()
+      if (response.status === 'success' && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to fetch subscriptions')
     },
-    enabled: !!subscriptionId,
   })
 }
 
-/**
- * Create subscription mutation
- */
 export function useCreateSubscription() {
   const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: (data: CreateSubscriptionData) => createSubscription(data),
+
+  return useMutation<SubscriptionWithClientSecret, Error, CreateSubscriptionRequest>({
+    mutationFn: async (payload: CreateSubscriptionRequest) => {
+      const response = await subscriptionService.createSubscription(payload)
+      if (response.status === 'success' && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to create subscription')
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions })
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to create subscription')
     },
   })
 }
 
-/**
- * Update subscription mutation
- */
-export function useUpdateSubscription() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: ({ subscriptionId, data }: { subscriptionId: string; data: Partial<CreateSubscriptionData> }) =>
-      updateSubscription(subscriptionId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
-    },
-  })
-}
-
-/**
- * Cancel subscription mutation
- */
 export function useCancelSubscription() {
   const queryClient = useQueryClient()
-  
+
   return useMutation({
-    mutationFn: (subscriptionId: string) => cancelSubscription(subscriptionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
+    mutationFn: async (payload: { id: string; accountIds?: string[] }) => {
+      const response = await subscriptionService.cancelSubscription(payload.id, payload.accountIds)
+      
+      // Handle account selection required
+      if (
+        response.status === 'error' &&
+        response.data &&
+        'accountSelectionRequired' in response.data &&
+        response.data.accountSelectionRequired
+      ) {
+        // Return the account selection data instead of throwing
+        interface AccountSelectionData {
+          accountSelectionRequired: true
+          accounts: Array<{
+            account_id: string
+            institution_name: string
+            custom_name?: string | null
+            account_type: string
+            balance: string
+            account_number_masked?: string | null
+          }>
+          excessCount: number
+          freeLimit: number
+        }
+        return {
+          accountSelectionRequired: true,
+          accounts: response.data.accounts,
+          excessCount: response.data.excessCount,
+          freeLimit: response.data.freeLimit,
+        } as AccountSelectionData
+      }
+      
+      if (response.status === 'success' && response.data && 'subscriptionId' in response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to cancel subscription')
+    },
+    onSuccess: (data) => {
+      // Only show success if cancellation actually completed (not account selection required)
+      if (data && typeof data === 'object' && !('accountSelectionRequired' in data)) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions })
+        toast.success('Subscription cancelled successfully')
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to cancel subscription')
     },
   })
 }
 
-/**
- * Main subscription hook with common operations
- * Note: This replaces the default export pattern - use useCurrentSubscription() directly if needed
- */
-export function useSubscriptionManagement() {
-  const { currentSubscription, isLoadingSubscriptions } = useCurrentSubscription()
-  const cancelSubscriptionMutation = useCancelSubscription()
-  
-  return {
-    currentSubscription,
-    isLoadingSubscriptions,
-    cancelSubscription: async (subscriptionId: string) => {
-      return cancelSubscriptionMutation.mutateAsync(subscriptionId)
+export function usePaymentMethod(enabled = true) {
+  return useQuery({
+    queryKey: ['payment-method'],
+    enabled,
+    queryFn: async () => {
+      const response = await subscriptionService.getPaymentMethod()
+      if (response.status === 'success') {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to load payment method')
     },
-    isCanceling: cancelSubscriptionMutation.isPending,
-  }
+  })
+}
+
+export function useUpdatePaymentMethod() {
+  const queryClient = useQueryClient()
+
+  return useMutation<PaymentMethodSummary | null, Error, string>({
+    mutationFn: async (paymentMethodId: string) => {
+      const response = await subscriptionService.updatePaymentMethod(paymentMethodId)
+      if (response.status === 'success') {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to update payment method')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['payment-method'] })
+      toast.success('Payment method updated successfully')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to update payment method')
+    },
+  })
+}
+
+export function useKeepSubscription() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await subscriptionService.keepSubscription(id)
+      if (response.status === 'success' && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to keep current plan')
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions })
+      toast.success('Your current plan will continue')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to keep current plan')
+    },
+  })
+}
+
+export function useAccountSelection(subscriptionId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['account-selection', subscriptionId],
+    queryFn: async () => {
+      if (!subscriptionId) throw new Error('Subscription ID is required')
+      const response = await subscriptionService.getAccountSelection(subscriptionId)
+      if (response.status === 'success' && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to fetch account selection')
+    },
+    enabled: enabled && !!subscriptionId,
+  })
+}
+
+export function useUpdateAccountSelection() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (payload: { subscriptionId: string; accountIds: string[] }) => {
+      const response = await subscriptionService.updateAccountSelection(
+        payload.subscriptionId,
+        payload.accountIds
+      )
+      if (response.status === 'success' && response.data) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to update account selection')
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions })
+      queryClient.invalidateQueries({ queryKey: ['account-selection', variables.subscriptionId] })
+      toast.success('Account selection updated successfully')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to update account selection')
+    },
+  })
 }
 

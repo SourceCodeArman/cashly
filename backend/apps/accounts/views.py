@@ -136,6 +136,30 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
     def get_object(self):
         return self.request.user
 
+    def retrieve(self, request, *args, **kwargs):
+        """Get user profile with standard API response format."""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response({
+            'status': 'success',
+            'data': serializer.data,
+            'message': 'Profile retrieved successfully'
+        }, status=status.HTTP_200_OK)
+    
+    def update(self, request, *args, **kwargs):
+        """Update user profile with standard API response format."""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        return Response({
+            'status': 'success',
+            'data': serializer.data,
+            'message': 'Profile updated successfully'
+        }, status=status.HTTP_200_OK)
+
 
 class PasswordResetView(generics.GenericAPIView):
     """

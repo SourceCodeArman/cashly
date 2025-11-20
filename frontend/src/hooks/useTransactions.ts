@@ -1,85 +1,38 @@
-/**
- * Transactions hook
- */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { transactionService } from '@/services/transactionService'
-import type { Transaction, TransactionFilters } from '@/types/transaction.types'
+import { transactionService, type TransactionFilters } from '@/services/transactionService'
+import { queryKeys } from '@/lib/queryClient'
 import { toast } from 'sonner'
 
 export function useTransactions(filters?: TransactionFilters) {
-  const queryClient = useQueryClient()
-
-  // Get transactions
-  const {
-    data: transactionsData,
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ['transactions', filters],
+  return useQuery({
+    queryKey: queryKeys.transactions(filters),
     queryFn: async () => {
-      const response = await transactionService.getTransactions(filters)
+      const response = await transactionService.listTransactions(filters)
       if (response.status === 'success' && response.data) {
         return response.data
       }
       throw new Error(response.message || 'Failed to fetch transactions')
     },
-    enabled: filters !== undefined,
-    staleTime: 30000, // 30 seconds
   })
+}
 
-  // Calculate pagination info
-  const pageSize = 20 // Default page size from backend
-  const currentPage = filters?.page || 1
-  const totalCount = transactionsData?.count || 0
-  const totalPages = Math.ceil(totalCount / pageSize) || 1
-
-  // Navigate to page
-  const goToPage = (page: number) => {
-    if (page >= 1 && page <= totalPages) {
-      // This will be handled by updating filters in the component
-      return page
-    }
-    return currentPage
-  }
-
-  // Get transaction by ID
-  const useTransaction = (transactionId: string) => {
-    return useQuery({
-      queryKey: ['transactions', transactionId],
-      queryFn: async () => {
-        const response = await transactionService.getTransaction(transactionId)
-        if (response.status === 'success' && response.data) {
-          return response.data
-        }
-        throw new Error(response.message || 'Failed to fetch transaction')
-      },
-      enabled: !!transactionId,
-    })
-  }
-
-  // Categorize transaction mutation
-  const categorizeMutation = useMutation({
-    mutationFn: async ({ transactionId, categoryId }: { transactionId: string; categoryId: string }) => {
-      const response = await transactionService.categorizeTransaction(transactionId, categoryId)
+export function useTransaction(id: string) {
+  return useQuery({
+    queryKey: queryKeys.transaction(id),
+    queryFn: async () => {
+      const response = await transactionService.getTransaction(id)
       if (response.status === 'success' && response.data) {
         return response.data
       }
-      throw new Error(response.message || 'Failed to categorize transaction')
+      throw new Error(response.message || 'Failed to fetch transaction')
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['transactions'] })
-      queryClient.setQueryData(['transactions', data.transaction_id], data)
-      toast.success('Transaction categorized')
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to categorize transaction')
-    },
+    enabled: !!id,
   })
+}
 
-  // Get transaction stats
-  const { data: stats } = useQuery({
-    queryKey: ['transactions', 'stats'],
+export function useTransactionStats() {
+  return useQuery({
+    queryKey: queryKeys.transactionStats,
     queryFn: async () => {
       const response = await transactionService.getTransactionStats()
       if (response.status === 'success' && response.data) {
@@ -87,92 +40,24 @@ export function useTransactions(filters?: TransactionFilters) {
       }
       throw new Error(response.message || 'Failed to fetch transaction stats')
     },
-    staleTime: 60000, // 1 minute
   })
-
-  return {
-    transactions: transactionsData?.results || [],
-    pagination: {
-      count: transactionsData?.count || 0,
-      next: transactionsData?.next,
-      previous: transactionsData?.previous,
-      currentPage,
-      totalPages,
-      pageSize,
-    },
-    isLoading,
-    error,
-    refetch,
-    useTransaction,
-    categorizeTransaction: categorizeMutation.mutate,
-    isCategorizing: categorizeMutation.isPending,
-    stats,
-    goToPage,
-  }
 }
 
-/**
- * Hook to fetch all transactions (without pagination) for client-side filtering
- * Fetches all pages by following pagination links
- */
-export function useAllTransactions(filters?: TransactionFilters) {
-  // Remove page from filters to start from page 1
-  const baseFilters = filters || {}
-  const { page, ...filtersWithoutPage } = baseFilters
-  
-  // Use a large page size to minimize requests, but will still follow pagination if needed
-  const allFilters: TransactionFilters = { ...filtersWithoutPage, page: 1, page_size: 1000 }
-  
-  const {
-    data: transactionsData,
-    isLoading,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ['transactions', 'all', filtersWithoutPage],
-    queryFn: async () => {
-      const allTransactions: Transaction[] = []
-      let currentPage = 1
-      let hasMore = true
-      
-      while (hasMore) {
-        const response = await transactionService.getTransactions({
-          ...allFilters,
-          page: currentPage,
-        })
-        
-        if (response.status === 'success' && response.data) {
-          allTransactions.push(...response.data.results)
-          
-          // Check if there's a next page
-          hasMore = !!response.data.next
-          currentPage++
-          
-          // Safety limit to prevent infinite loops
-          if (currentPage > 100) {
-            console.warn('Reached maximum page limit (100) while fetching all transactions')
-            break
-          }
-        } else {
-          throw new Error(response.message || 'Failed to fetch transactions')
-        }
-      }
-      
-      return {
-        results: allTransactions,
-        count: allTransactions.length,
-        next: null,
-        previous: null,
-      }
-    },
-    staleTime: 30000, // 30 seconds
-  })
+export function useCategorizeTransaction() {
+  const queryClient = useQueryClient()
 
-  return {
-    transactions: transactionsData?.results || [],
-    isLoading,
-    error,
-    refetch,
-  }
+  return useMutation({
+    mutationFn: ({ id, categoryId }: { id: string; categoryId: string }) =>
+      transactionService.categorizeTransaction(id, categoryId),
+    onSuccess: (response, variables) => {
+      const transactionId = response.data?.id ?? variables.id
+      queryClient.invalidateQueries({ queryKey: queryKeys.transactions() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.transaction(transactionId) })
+      toast.success('Transaction categorized successfully')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to categorize transaction')
+    },
+  })
 }
 

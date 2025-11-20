@@ -13,7 +13,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # Security
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-in-production')
 DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,acetometrical-judah-needier.ngrok-free.dev', cast=lambda v: [s.strip() for s in v.split(',')])
+APPEND_SLASH = config('APPEND_SLASH', default=False, cast=bool)
 
 # Application definition
 INSTALLED_APPS = [
@@ -176,7 +177,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Los_Angeles'  # PST/PDT
 USE_I18N = True
 USE_TZ = True
 
@@ -291,10 +292,32 @@ STRIPE_PUBLISHABLE_KEY = config('STRIPE_PUBLISHABLE_KEY', default='')
 STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET', default='')
 STRIPE_API_VERSION = config('STRIPE_API_VERSION', default='2024-12-18.acacia')
 # Stripe Price IDs (set after running create_stripe_products command)
-STRIPE_PREMIUM_MONTHLY_PRICE_ID = config('STRIPE_PREMIUM_MONTHLY_PRICE_ID', default='')
-STRIPE_PREMIUM_ANNUAL_PRICE_ID = config('STRIPE_PREMIUM_ANNUAL_PRICE_ID', default='')
-STRIPE_PRO_MONTHLY_PRICE_ID = config('STRIPE_PRO_MONTHLY_PRICE_ID', default='')
-STRIPE_PRO_ANNUAL_PRICE_ID = config('STRIPE_PRO_ANNUAL_PRICE_ID', default='')
+STRIPE_PREMIUM_MONTHLY_PRICE_ID = config(
+    'STRIPE_PREMIUM_MONTHLY_PRICE_ID',
+    default='price_1SU4th9FH3KQIIeT32lJfeW2',
+)
+STRIPE_PREMIUM_ANNUAL_PRICE_ID = config(
+    'STRIPE_PREMIUM_ANNUAL_PRICE_ID',
+    default='price_1SU4th9FH3KQIIeT32lJfeW2',
+)
+STRIPE_PRO_MONTHLY_PRICE_ID = config(
+    'STRIPE_PRO_MONTHLY_PRICE_ID',
+    default='price_1SU4sS9FH3KQIIeTUG3QLP7T',
+)
+STRIPE_PRO_ANNUAL_PRICE_ID = config(
+    'STRIPE_PRO_ANNUAL_PRICE_ID',
+    default='price_1SU4sS9FH3KQIIeTUG3QLP7T',
+)
+
+# Enterprise tier price IDs (optional - custom pricing)
+STRIPE_ENTERPRISE_MONTHLY_PRICE_ID = config(
+    'STRIPE_ENTERPRISE_MONTHLY_PRICE_ID',
+    default='',
+)
+STRIPE_ENTERPRISE_ANNUAL_PRICE_ID = config(
+    'STRIPE_ENTERPRISE_ANNUAL_PRICE_ID',
+    default='',
+)
 
 # AI Categorization Configuration
 # Enable/disable AI-powered transaction categorization

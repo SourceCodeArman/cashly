@@ -1,83 +1,84 @@
-/**
- * Authentication store using Zustand
- */
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
-import type { User, AuthTokens } from '@/types/auth.types'
-import { TOKEN_STORAGE_KEY, USER_STORAGE_KEY } from '@/utils/constants'
+import { persist } from 'zustand/middleware'
+import type { User } from '@/types'
+import { authService } from '@/services/authService'
 
 interface AuthState {
   user: User | null
-  tokens: AuthTokens | null
+  accessToken: string | null
+  refreshToken: string | null
   isAuthenticated: boolean
-  login: (tokens: AuthTokens, user: User) => void
+  isSuperuser: boolean
+  setUser: (user: User | null) => void
+  setTokens: (access: string, refresh: string) => void
   logout: () => void
-  setUser: (user: User) => void
-  setTokens: (tokens: AuthTokens) => void
-  updateUser: (updates: Partial<User>) => void
+  initializeAuth: () => void
 }
 
-export const authStore = create<AuthState>()(
+export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
-      tokens: null,
+      accessToken: null,
+      refreshToken: null,
       isAuthenticated: false,
-      
-      login: (tokens: AuthTokens, user: User) => {
-        // Store tokens in localStorage
-        localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens))
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user))
-        
+      isSuperuser: false,
+
+      setUser: (user) => {
         set({
-          tokens,
           user,
-          isAuthenticated: true,
+          isAuthenticated: !!user,
+          isSuperuser: user?.isSuperuser || false
         })
       },
-      
+
+      setTokens: (accessToken, refreshToken) =>
+        set({ accessToken, refreshToken }),
+
       logout: () => {
-        // Clear tokens and user from localStorage
-        localStorage.removeItem(TOKEN_STORAGE_KEY)
-        localStorage.removeItem(USER_STORAGE_KEY)
-        
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
         set({
           user: null,
-          tokens: null,
+          accessToken: null,
+          refreshToken: null,
           isAuthenticated: false,
+          isSuperuser: false
         })
       },
-      
-      setUser: (user: User) => {
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user))
-        set({ user })
-      },
-      
-      setTokens: (tokens: AuthTokens) => {
-        localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(tokens))
-        set({ tokens })
-      },
-      
-      updateUser: (updates: Partial<User>) => {
-        set((state) => {
-          if (!state.user) return state
-          
-          const updatedUser = { ...state.user, ...updates }
-          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser))
-          
-          return { user: updatedUser }
-        })
+
+      initializeAuth: async () => {
+        const token = localStorage.getItem('accessToken')
+        if (token) {
+          try {
+            const response = await authService.getProfile()
+            if (response.status === 'success' && response.data) {
+              const userData = response.data
+              set({
+                user: userData,
+                isAuthenticated: true,
+                isSuperuser: userData.isSuperuser || false
+              })
+              console.log('Auth initialized, isSuperuser:', userData.isSuperuser)
+            } else {
+              get().logout()
+            }
+          } catch (error) {
+            console.error('Failed to initialize auth:', error)
+            get().logout()
+          }
+        }
       },
     }),
     {
       name: 'auth-storage',
-      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         user: state.user,
-        tokens: state.tokens,
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
+        isSuperuser: state.isSuperuser,
       }),
     }
   )
 )
-

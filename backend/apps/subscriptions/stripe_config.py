@@ -9,6 +9,8 @@ PREMIUM_MONTHLY_PRICE_ID = getattr(settings, 'STRIPE_PREMIUM_MONTHLY_PRICE_ID', 
 PREMIUM_ANNUAL_PRICE_ID = getattr(settings, 'STRIPE_PREMIUM_ANNUAL_PRICE_ID', '')
 PRO_MONTHLY_PRICE_ID = getattr(settings, 'STRIPE_PRO_MONTHLY_PRICE_ID', '')
 PRO_ANNUAL_PRICE_ID = getattr(settings, 'STRIPE_PRO_ANNUAL_PRICE_ID', '')
+ENTERPRISE_MONTHLY_PRICE_ID = getattr(settings, 'STRIPE_ENTERPRISE_MONTHLY_PRICE_ID', '')
+ENTERPRISE_ANNUAL_PRICE_ID = getattr(settings, 'STRIPE_ENTERPRISE_ANNUAL_PRICE_ID', '')
 
 
 def get_price_id(plan: str, billing_cycle: str) -> str:
@@ -16,7 +18,7 @@ def get_price_id(plan: str, billing_cycle: str) -> str:
     Get Stripe Price ID for given plan and billing cycle.
     
     Args:
-        plan: 'premium' or 'pro'
+        plan: 'premium', 'pro', or 'enterprise'
         billing_cycle: 'monthly' or 'annual'
     
     Returns:
@@ -42,6 +44,13 @@ def get_price_id(plan: str, billing_cycle: str) -> str:
             return PRO_ANNUAL_PRICE_ID
         else:
             raise ValueError(f"Invalid billing_cycle: {billing_cycle}")
+    elif plan == 'enterprise':
+        if billing_cycle == 'monthly':
+            return ENTERPRISE_MONTHLY_PRICE_ID
+        elif billing_cycle == 'annual':
+            return ENTERPRISE_ANNUAL_PRICE_ID
+        else:
+            raise ValueError(f"Invalid billing_cycle: {billing_cycle}")
     else:
         raise ValueError(f"Invalid plan: {plan}")
 
@@ -62,6 +71,10 @@ def get_all_price_ids() -> dict:
             'monthly': PRO_MONTHLY_PRICE_ID,
             'annual': PRO_ANNUAL_PRICE_ID,
         },
+        'enterprise': {
+            'monthly': ENTERPRISE_MONTHLY_PRICE_ID,
+            'annual': ENTERPRISE_ANNUAL_PRICE_ID,
+        },
     }
 
 
@@ -69,13 +82,16 @@ def validate_price_ids() -> bool:
     """
     Validate that all required Price IDs are configured.
     
+    Note: Enterprise tier price IDs are optional as pricing is custom.
+    
     Returns:
-        True if all Price IDs are set, False otherwise
+        True if all required Price IDs are set, False otherwise
     """
     return all([
         PREMIUM_MONTHLY_PRICE_ID,
         PREMIUM_ANNUAL_PRICE_ID,
         PRO_MONTHLY_PRICE_ID,
         PRO_ANNUAL_PRICE_ID,
+        # Enterprise price IDs are optional (custom pricing)
     ])
 

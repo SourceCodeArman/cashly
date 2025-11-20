@@ -5,6 +5,7 @@ import json
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from django.utils import timezone
+from django.conf import settings
 from plaid.exceptions import ApiException
 from pathlib import Path
 
@@ -108,22 +109,44 @@ def fetch_transactions(account, start_date=None, end_date=None):
             )
         )
         
-        # Only print and save request/response when connecting an account (initial sync when last_synced_at is None)
+        # Always save response for debugging (can be disabled via settings)
+        save_responses = getattr(settings, 'PLAID_SAVE_RESPONSES', True)
         is_initial_connection = account.last_synced_at is None
         
         if is_initial_connection:
-            print(f"Request: {request}")
+            print(f"[PLAID DEBUG] Request: {request}")
         
         response = client.transactions_get(request)
         response_dict = response.to_dict()
         
-        # Save response to file only on initial account connection
-        if is_initial_connection:
+        # Save response to file for debugging (always on initial, configurable for subsequent syncs)
+        if save_responses or is_initial_connection:
             _save_plaid_response_to_file(response_dict, account, start_date, end_date)
-            print(f"Response: {response}")
-            print(f"Response dict: {response_dict}")
+            if is_initial_connection:
+                print(f"[PLAID DEBUG] Response: {response}")
+                print(f"[PLAID DEBUG] Response dict: {response_dict}")
         
         transactions = response_dict.get('transactions', [])
+        
+        # Log sample transaction with category data for debugging
+        if transactions and len(transactions) > 0:
+            sample_txn = transactions[0]
+            personal_finance_category = sample_txn.get('personal_finance_category')
+            logger.info(
+                f"[PLAID DEBUG] Sample transaction from Plaid:\n"
+                f"  Merchant: {sample_txn.get('merchant_name') or sample_txn.get('name', 'Unknown')}\n"
+                f"  Amount: {sample_txn.get('amount')}\n"
+                f"  Personal Finance Category: {personal_finance_category}\n"
+                f"  Category (legacy): {sample_txn.get('category')}\n"
+                f"  Transaction Code: {sample_txn.get('transaction_code')}\n"
+                f"  Transaction Type: {sample_txn.get('transaction_type')}"
+            )
+            print(
+                f"\n[PLAID DEBUG] Sample transaction:\n"
+                f"  Merchant: {sample_txn.get('merchant_name') or sample_txn.get('name', 'Unknown')}\n"
+                f"  Amount: {sample_txn.get('amount')}\n"
+                f"  Personal Finance Category: {json.dumps(personal_finance_category, default=str, indent=2) if personal_finance_category else 'None'}\n"
+            )
         
         # Handle pagination if needed
         total_transactions = response_dict.get('total_transactions', len(transactions))

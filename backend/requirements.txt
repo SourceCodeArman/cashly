@@ -40,4 +40,5 @@ python-dateutil==2.8.2
 django-filter==23.5
 requests==2.31.0
 setuptools>=80.0.0
+psutil>=5.9.0
 

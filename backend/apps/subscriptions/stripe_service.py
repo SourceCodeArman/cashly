@@ -118,6 +118,35 @@ def attach_payment_method_to_customer(customer_id: str, payment_method_id: str) 
         raise StripeIntegrationError(f"Failed to attach payment method: {str(e)}")
 
 
+def get_customer_payment_method(customer_id: str) -> Optional[Dict]:
+    """
+    Retrieve the default payment method for a Stripe customer.
+    """
+    try:
+        client = get_stripe_client()
+        customer = client.Customer.retrieve(
+            customer_id,
+            expand=['invoice_settings.default_payment_method']
+        )
+        payment_method = customer.invoice_settings.default_payment_method
+        if payment_method and payment_method.get('card'):
+            card = payment_method.card
+            return {
+                'id': payment_method.id,
+                'brand': card.get('brand'),
+                'last4': card.get('last4'),
+                'funding': card.get('funding'),
+                'exp_month': card.get('exp_month'),
+                'exp_year': card.get('exp_year'),
+                'fingerprint': card.get('fingerprint'),
+                'country': card.get('country'),
+            }
+        return None
+    except stripe.StripeError as e:
+        logger.error(f"Failed to retrieve payment method for customer {customer_id}: {e}")
+        raise StripeIntegrationError(f"Failed to retrieve payment method: {str(e)}")
+
+
 def create_subscription(
     customer_id: str,
     payment_method_id: str,
@@ -325,6 +354,39 @@ def cancel_subscription(subscription_id: str, cancel_at_period_end: bool = True)
     except stripe.StripeError as e:
         logger.error(f"Failed to cancel subscription {subscription_id}: {e}")
         raise StripeIntegrationError(f"Failed to cancel subscription: {str(e)}")
+
+
+def resume_subscription(subscription_id: str) -> Dict:
+    """
+    Resume a Stripe subscription that was scheduled for cancellation.
+    
+    Args:
+        subscription_id: Stripe subscription ID
+    
+    Returns:
+        Dictionary with updated subscription data
+    
+    Raises:
+        StripeIntegrationError: If resuming fails
+    """
+    try:
+        client = get_stripe_client()
+        subscription = client.Subscription.modify(
+            subscription_id,
+            cancel_at_period_end=False,
+        )
+        logger.info(f"Resumed subscription {subscription_id}")
+        return {
+            'subscription_id': subscription.id,
+            'status': subscription.status,
+            'cancel_at_period_end': subscription.cancel_at_period_end,
+            'current_period_end': timezone.make_aware(
+                datetime.fromtimestamp(subscription.current_period_end)
+            ),
+        }
+    except stripe.StripeError as e:
+        logger.error(f"Failed to resume subscription {subscription_id}: {e}")
+        raise StripeIntegrationError(f"Failed to resume subscription: {str(e)}")
 
 
 def update_subscription_plan(

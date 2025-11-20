@@ -7,8 +7,9 @@ from django.db import transaction
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 
-from .models import Subscription, PendingSubscription, StripeWebhookEvent
+from .models import Subscription, PendingSubscription, StripeWebhookEvent, AccountDowngradeSelection
 from .stripe_config import get_price_id
+from .stripe_service import create_subscription, get_customer_payment_method, StripeIntegrationError
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -140,7 +141,11 @@ def handle_subscription_updated(event_data):
         subscription.trial_end = timezone.make_aware(
             datetime.fromtimestamp(subscription_data['trial_end'])
         ) if subscription_data.get('trial_end') else None
+        
+        # Track if cancel_at_period_end just became True (check before updating)
+        was_cancelled = subscription.cancel_at_period_end
         subscription.cancel_at_period_end = subscription_data.get('cancel_at_period_end', False)
+        is_now_cancelled = subscription.cancel_at_period_end
         
         if subscription_data.get('canceled_at'):
             subscription.canceled_at = timezone.make_aware(
@@ -164,6 +169,55 @@ def handle_subscription_updated(event_data):
             user.subscription_tier = 'free'
         
         user.save(update_fields=['subscription_tier', 'subscription_status', 'subscription_end_date'])
+        
+        # If subscription was just cancelled and user has excess accounts, prompt for selection
+        if is_now_cancelled and not was_cancelled:
+            try:
+                from apps.accounts.models import Account
+                from apps.subscriptions.limits import FEATURE_ACCOUNTS, TIER_FREE
+                from apps.subscriptions.limit_service import SubscriptionLimitService
+                
+                # Count active accounts
+                active_account_count = Account.objects.for_user(user).active().count()
+                
+                # Get free tier limit
+                free_limit = SubscriptionLimitService.get_limit(user, FEATURE_ACCOUNTS)
+                # If user is still on paid tier, temporarily check against free limit
+                if user.subscription_tier != TIER_FREE:
+                    from apps.subscriptions.limits import get_limit
+                    free_limit = get_limit(TIER_FREE, FEATURE_ACCOUNTS)
+                
+                # Check if user has excess accounts
+                if active_account_count > free_limit:
+                    excess_count = active_account_count - free_limit
+                    
+                    # Create account downgrade selection record (without selection yet)
+                    AccountDowngradeSelection.objects.get_or_create(
+                        subscription=subscription,
+                        defaults={
+                            'user': user,
+                            'accounts_to_keep': [],
+                            'deactivation_scheduled_at': subscription.current_period_end,
+                        }
+                    )
+                    
+                    # Send notification prompting user to select accounts
+                    from apps.notifications.tasks import create_account_selection_required_notification
+                    create_account_selection_required_notification(
+                        user=user,
+                        subscription=subscription,
+                        excess_count=excess_count
+                    )
+                    
+                    logger.info(
+                        f"Subscription {subscription_id} cancelled. User {user.id} has {excess_count} "
+                        f"excess accounts. Notification sent to select accounts."
+                    )
+            except Exception as e:
+                logger.error(
+                    f"Error handling account selection prompt for subscription {subscription_id}: {e}",
+                    exc_info=True
+                )
         
         logger.info(f"Updated subscription {subscription_id} for user {user.id}")
         
@@ -202,7 +256,135 @@ def handle_subscription_deleted(event_data):
         user.subscription_end_date = None
         user.save(update_fields=['subscription_tier', 'subscription_status', 'subscription_end_date'])
         
+        # Handle account deactivation for excess accounts
+        try:
+            from apps.accounts.models import Account
+            from apps.subscriptions.limits import FEATURE_ACCOUNTS, TIER_FREE
+            from apps.subscriptions.limits import get_limit as get_subscription_limit
+            
+            # Get free tier account limit
+            free_limit = get_subscription_limit(TIER_FREE, FEATURE_ACCOUNTS)
+            active_accounts = Account.objects.for_user(user).active()
+            active_account_count = active_accounts.count()
+            
+            # Only deactivate if user has more than free tier limit
+            if active_account_count > free_limit:
+                # Check if user made a selection
+                selection = AccountDowngradeSelection.objects.filter(
+                    subscription=subscription,
+                    deactivation_completed_at__isnull=True
+                ).first()
+                
+                accounts_to_deactivate = []
+                
+                if selection and selection.accounts_to_keep:
+                    # User made a selection - deactivate accounts NOT in the list
+                    accounts_to_keep_ids = set(str(uuid) for uuid in selection.accounts_to_keep)
+                    accounts_to_deactivate = [
+                        account for account in active_accounts
+                        if str(account.account_id) not in accounts_to_keep_ids
+                    ]
+                    
+                    logger.info(
+                        f"User {user.id} selected {len(selection.accounts_to_keep)} accounts to keep. "
+                        f"Deactivating {len(accounts_to_deactivate)} accounts."
+                    )
+                else:
+                    # No selection made - default behavior: keep 3 most recently synced accounts
+                    # Sort by last_synced_at (most recent first), then by created_at
+                    accounts_sorted = active_accounts.order_by(
+                        '-last_synced_at', '-created_at'
+                    )
+                    accounts_to_keep_default = accounts_sorted[:free_limit]
+                    accounts_to_keep_ids = set(str(acc.account_id) for acc in accounts_to_keep_default)
+                    accounts_to_deactivate = [
+                        account for account in active_accounts
+                        if str(account.account_id) not in accounts_to_keep_ids
+                    ]
+                    
+                    logger.warning(
+                        f"User {user.id} did not select accounts. Using default: keeping "
+                        f"{len(accounts_to_keep_default)} most recently synced accounts, "
+                        f"deactivating {len(accounts_to_deactivate)} accounts."
+                    )
+                
+                # Deactivate excess accounts
+                if accounts_to_deactivate:
+                    deactivated_account_names = []
+                    for account in accounts_to_deactivate:
+                        account.is_active = False
+                        account.save(update_fields=['is_active'])
+                        deactivated_account_names.append(
+                            account.custom_name or account.institution_name
+                        )
+                    
+                    # Update selection record if it exists
+                    if selection:
+                        selection.deactivation_completed_at = timezone.now()
+                        selection.save(update_fields=['deactivation_completed_at'])
+                    
+                    # Send notification
+                    from apps.notifications.tasks import create_account_deactivation_complete_notification
+                    create_account_deactivation_complete_notification(
+                        user=user,
+                        deactivated_accounts=deactivated_account_names
+                    )
+                    
+                    logger.info(
+                        f"Deactivated {len(accounts_to_deactivate)} accounts for user {user.id} "
+                        f"after subscription {subscription_id} ended"
+                    )
+        except Exception as e:
+            logger.error(
+                f"Error deactivating excess accounts for subscription {subscription_id}: {e}",
+                exc_info=True
+            )
+        
         logger.info(f"Deleted subscription {subscription_id} for user {user.id}")
+
+        # Automatically create new subscription if a pending plan change was scheduled
+        if subscription.pending_plan:
+            try:
+                payment_method = get_customer_payment_method(subscription.stripe_customer_id)
+            except StripeIntegrationError as e:
+                payment_method = None
+                logger.error(f"Failed to load payment method for customer {subscription.stripe_customer_id}: {e}")
+
+            if payment_method and payment_method.get('id'):
+                try:
+                    new_billing_cycle = subscription.pending_billing_cycle or subscription.billing_cycle
+                    create_subscription(
+                        subscription.stripe_customer_id,
+                        payment_method['id'],
+                        subscription.pending_plan,
+                        new_billing_cycle,
+                        trial_enabled=False
+                    )
+                    logger.info(
+                        f"Created replacement subscription for user {user.id} with plan {subscription.pending_plan}"
+                    )
+                except StripeIntegrationError as e:
+                    logger.error(
+                        f"Failed to create replacement subscription for user {user.id}: {e}",
+                        exc_info=True,
+                    )
+            else:
+                logger.warning(
+                    f"No default payment method available to create replacement subscription for user {user.id}"
+                )
+
+            subscription.pending_plan = None
+            subscription.pending_billing_cycle = None
+            subscription.pending_price_id_monthly = None
+            subscription.pending_price_id_annual = None
+            subscription.pending_requested_at = None
+            subscription.save(update_fields=[
+                'pending_plan',
+                'pending_billing_cycle',
+                'pending_price_id_monthly',
+                'pending_price_id_annual',
+                'pending_requested_at',
+            ])
         
     except Exception as e:
         logger.error(f"Error handling subscription.deleted event: {e}", exc_info=True)

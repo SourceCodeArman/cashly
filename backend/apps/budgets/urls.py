@@ -1,10 +1,15 @@
 """
-URLs for budgets app (placeholder for future use).
+URLs for budgets app.
 """
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from . import views
+
+router = DefaultRouter()
+router.register(r'', views.BudgetViewSet, basename='budget')
 
 app_name = 'budgets'
 urlpatterns = [
-    # Budget endpoints will be implemented in Phase 2
+    path('', include(router.urls)),
 ]
 

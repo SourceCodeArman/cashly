@@ -19,6 +19,7 @@ FEATURE_TRANSFER_AUTHORIZATION = 'transfer_authorization'
 TIER_FREE = 'free'
 TIER_PREMIUM = 'premium'
 TIER_PRO = 'pro'
+TIER_ENTERPRISE = 'enterprise'
 
 # Unlimited constant for numeric limits
 UNLIMITED = None
@@ -33,7 +34,7 @@ def _transaction_history_days(days: int) -> timedelta:
 # Format: {tier: {feature: limit}}
 SUBSCRIPTION_LIMITS: Dict[str, Dict[str, Any]] = {
     TIER_FREE: {
-        FEATURE_ACCOUNTS: 1,
+        FEATURE_ACCOUNTS: 3,
         FEATURE_GOALS: 3,
         FEATURE_BUDGETS: 5,
         FEATURE_TRANSACTION_HISTORY: _transaction_history_days(30),
@@ -43,17 +44,27 @@ SUBSCRIPTION_LIMITS: Dict[str, Dict[str, Any]] = {
         FEATURE_TRANSFER_AUTHORIZATION: False,
     },
     TIER_PREMIUM: {
-        FEATURE_ACCOUNTS: 3,
-        FEATURE_GOALS: 10,
-        FEATURE_BUDGETS: 20,
-        FEATURE_TRANSACTION_HISTORY: _transaction_history_days(365),
+        FEATURE_ACCOUNTS: UNLIMITED,
+        FEATURE_GOALS: UNLIMITED,
+        FEATURE_BUDGETS: UNLIMITED,
+        FEATURE_TRANSACTION_HISTORY: UNLIMITED,
         FEATURE_AI_CATEGORIZATION: True,
         FEATURE_ADVANCED_ANALYTICS: True,
         FEATURE_EXPORT: True,
         FEATURE_TRANSFER_AUTHORIZATION: True,
     },
     TIER_PRO: {
-        FEATURE_ACCOUNTS: 10,
+        FEATURE_ACCOUNTS: 10,  # Up to 10 connected accounts
+        FEATURE_GOALS: UNLIMITED,
+        FEATURE_BUDGETS: UNLIMITED,
+        FEATURE_TRANSACTION_HISTORY: UNLIMITED,
+        FEATURE_AI_CATEGORIZATION: True,
+        FEATURE_ADVANCED_ANALYTICS: True,
+        FEATURE_EXPORT: True,
+        FEATURE_TRANSFER_AUTHORIZATION: True,
+    },
+    TIER_ENTERPRISE: {
+        FEATURE_ACCOUNTS: UNLIMITED,  # 20+ accounts, effectively unlimited
         FEATURE_GOALS: UNLIMITED,
         FEATURE_BUDGETS: UNLIMITED,
         FEATURE_TRANSACTION_HISTORY: UNLIMITED,

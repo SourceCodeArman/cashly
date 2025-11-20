@@ -12,13 +12,14 @@ from datetime import datetime
 
 from .models import Transaction, Category
 from .serializers import (
-    TransactionListSerializer,
     TransactionDetailSerializer,
     TransactionCreateSerializer,
     TransactionCategorizeSerializer,
     CategorySerializer,
     CategoryCreateSerializer,
     CategorySuggestionSerializer,
+    TransactionFrontendSerializer,
+    TransactionStatsSerializer,
 )
 from .categorization import get_category_suggestions, apply_category_to_transaction, auto_categorize_transaction
 from .plaid_category_mapper import categorize_transactions_from_plaid
@@ -32,6 +33,10 @@ logger = logging.getLogger(__name__)
 class TransactionViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Transaction management.
+
+    The `list` and `retrieve` actions return data wrapped in the shared
+    `ApiResponse` contract with camelCase payloads so the frontend can
+    consume transactions without additional mapping.
     """
     permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -113,11 +118,31 @@ class TransactionViewSet(viewsets.ModelViewSet):
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action."""
-        if self.action == 'list':
-            return TransactionListSerializer
-        elif self.action == 'create':
+        if self.action in ['list', 'retrieve']:
+            return TransactionFrontendSerializer
+        if self.action == 'create':
             return TransactionCreateSerializer
         return TransactionDetailSerializer
+
+    def list(self, request, *args, **kwargs):
+        """Wrap list response to match ApiResponse contract."""
+        response = super().list(request, *args, **kwargs)
+        # DRF pagination wraps results in {'results': [...]}, extract if present
+        data = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
+        return Response({
+            'status': 'success',
+            'data': data,
+            'message': 'Transactions retrieved successfully'
+        }, status=response.status_code)
+
+    def retrieve(self, request, *args, **kwargs):
+        """Wrap retrieve response to match ApiResponse contract."""
+        response = super().retrieve(request, *args, **kwargs)
+        return Response({
+            'status': 'success',
+            'data': response.data,
+            'message': 'Transaction retrieved successfully'
+        }, status=response.status_code)
     
     def perform_create(self, serializer):
         """Set user automatically on create and auto-categorize if enabled."""
@@ -188,25 +213,24 @@ class TransactionViewSet(viewsets.ModelViewSet):
         expenses = queryset.expenses()
         income = queryset.income()
         
-        expense_count = expenses.count()
-        income_count = income.count()
-        
         expense_total = expenses.aggregate(total=Sum('amount'))['total'] or 0
         income_total = income.aggregate(total=Sum('amount'))['total'] or 0
         
         # Convert to positive for expenses (they're stored as negative)
         expense_total = abs(expense_total)
+        net_total = income_total - expense_total
+
+        stats_payload = TransactionStatsSerializer(data={
+            'totalSpending': expense_total,
+            'totalIncome': income_total,
+            'totalTransactions': total_count,
+            'net': net_total,
+        })
+        stats_payload.is_valid(raise_exception=True)
         
         return Response({
             'status': 'success',
-            'data': {
-                'total_count': total_count,
-                'expense_count': expense_count,
-                'income_count': income_count,
-                'expense_total': float(expense_total),
-                'income_total': float(income_total),
-                'net': float(income_total - expense_total),
-            },
+            'data': stats_payload.data,
             'message': 'Statistics retrieved successfully'
         }, status=status.HTTP_200_OK)
     
@@ -372,14 +396,26 @@ class TransactionViewSet(viewsets.ModelViewSet):
 class CategoryViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Category management.
+    
+    The `list` and `retrieve` actions return data wrapped in the shared
+    `ApiResponse` contract with camelCase payloads so the frontend can
+    consume categories without additional mapping.
     """
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['type', 'is_system_category']
+    pagination_class = None  # Disable pagination for categories - there are limited system categories
     
     def get_queryset(self):
         """Return system categories and user's custom categories."""
-        return Category.objects.for_user(self.request.user)
+        queryset = Category.objects.for_user(self.request.user)
+        
+        # Filter for parent categories only (those without a parent_category)
+        parent_only = self.request.query_params.get('parent_only', 'false').lower() == 'true'
+        if parent_only:
+            queryset = queryset.filter(parent_category__isnull=True)
+        
+        return queryset
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action."""
@@ -387,15 +423,64 @@ class CategoryViewSet(viewsets.ModelViewSet):
             return CategoryCreateSerializer
         return CategorySerializer
     
+    def list(self, request, *args, **kwargs):
+        """Wrap list response to match ApiResponse contract."""
+        response = super().list(request, *args, **kwargs)
+        # DRF pagination wraps results in {'results': [...]}, extract if present
+        data = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
+        return Response({
+            'status': 'success',
+            'data': data,
+            'message': 'Categories retrieved successfully'
+        }, status=response.status_code)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Wrap retrieve response to match ApiResponse contract."""
+        response = super().retrieve(request, *args, **kwargs)
+        return Response({
+            'status': 'success',
+            'data': response.data,
+            'message': 'Category retrieved successfully'
+        }, status=response.status_code)
+    
+    def create(self, request, *args, **kwargs):
+        """Wrap create response to match ApiResponse contract."""
+        response = super().create(request, *args, **kwargs)
+        return Response({
+            'status': 'success',
+            'data': response.data,
+            'message': 'Category created successfully'
+        }, status=response.status_code)
+    
+    def update(self, request, *args, **kwargs):
+        """Wrap update response to match ApiResponse contract."""
+        response = super().update(request, *args, **kwargs)
+        return Response({
+            'status': 'success',
+            'data': response.data,
+            'message': 'Category updated successfully'
+        }, status=response.status_code)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Wrap destroy response to match ApiResponse contract."""
+        instance = self.get_object()
+        # Check if it's a system category before deletion
+        if instance.is_system_category:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError('Cannot delete system categories')
+        self.perform_destroy(instance)
+        return Response({
+            'status': 'success',
+            'data': None,
+            'message': 'Category deleted successfully'
+        }, status=status.HTTP_200_OK)
+    
     def perform_create(self, serializer):
         """Set user for custom categories."""
         serializer.save(user=self.request.user, is_system_category=False)
     
     def perform_destroy(self, instance):
-        """Prevent deletion of system categories."""
-        if instance.is_system_category:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError('Cannot delete system categories')
+        """Delete the category instance."""
         instance.delete()
     
     @action(detail=False, methods=['post'])
@@ -458,6 +543,195 @@ class CategoryViewSet(viewsets.ModelViewSet):
                 'status': 'error',
                 'data': None,
                 'message': f'Failed to categorize transactions: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'], url_path='export/csv')
+    def export_csv(self, request):
+        """
+        GET /api/v1/transactions/export/csv/
+        Export transactions to CSV format.
+        
+        Query parameters:
+        - date_from: Start date (YYYY-MM-DD)
+        - date_to: End date (YYYY-MM-DD)
+        """
+        try:
+            from .export import export_transactions_csv
+            from apps.subscriptions.exceptions import FeatureNotAvailable
+            from datetime import datetime
+            
+            date_from = None
+            date_to = None
+            
+            date_from_str = request.query_params.get('date_from', None)
+            date_to_str = request.query_params.get('date_to', None)
+            
+            if date_from_str:
+                try:
+                    date_from = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+                except ValueError:
+                    return Response({
+                        'status': 'error',
+                        'data': None,
+                        'message': 'Invalid date_from format. Use YYYY-MM-DD'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if date_to_str:
+                try:
+                    date_to = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+                except ValueError:
+                    return Response({
+                        'status': 'error',
+                        'data': None,
+                        'message': 'Invalid date_to format. Use YYYY-MM-DD'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            return export_transactions_csv(
+                user=request.user,
+                date_from=date_from,
+                date_to=date_to
+            )
+        except FeatureNotAvailable as e:
+            logger.info(f"Export feature not available for user {request.user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except Exception as e:
+            logger.error(f"Error exporting transactions to CSV: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'Failed to export transactions'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'], url_path='export/pdf')
+    def export_pdf(self, request):
+        """
+        GET /api/v1/transactions/export/pdf/
+        Export transactions to PDF format.
+        
+        Query parameters:
+        - date_from: Start date (YYYY-MM-DD)
+        - date_to: End date (YYYY-MM-DD)
+        
+        Note: PDF export is not yet implemented.
+        """
+        try:
+            from .export import export_transactions_pdf
+            from apps.subscriptions.exceptions import FeatureNotAvailable
+            from datetime import datetime
+            
+            date_from = None
+            date_to = None
+            
+            date_from_str = request.query_params.get('date_from', None)
+            date_to_str = request.query_params.get('date_to', None)
+            
+            if date_from_str:
+                try:
+                    date_from = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+                except ValueError:
+                    return Response({
+                        'status': 'error',
+                        'data': None,
+                        'message': 'Invalid date_from format. Use YYYY-MM-DD'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if date_to_str:
+                try:
+                    date_to = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+                except ValueError:
+                    return Response({
+                        'status': 'error',
+                        'data': None,
+                        'message': 'Invalid date_to format. Use YYYY-MM-DD'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            return export_transactions_pdf(
+                user=request.user,
+                date_from=date_from,
+                date_to=date_to
+            )
+        except NotImplementedError:
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'PDF export is not yet implemented. Please use CSV export.',
+                'error_code': 'NOT_IMPLEMENTED'
+            }, status=status.HTTP_501_NOT_IMPLEMENTED)
+        except FeatureNotAvailable as e:
+            logger.info(f"Export feature not available for user {request.user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except Exception as e:
+            logger.error(f"Error exporting transactions to PDF: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'Failed to export transactions'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['get'], url_path='export/summary')
+    def export_summary(self, request):
+        """
+        GET /api/v1/transactions/export/summary/
+        Get summary statistics for export preview.
+        
+        Query parameters:
+        - date_from: Start date (YYYY-MM-DD)
+        - date_to: End date (YYYY-MM-DD)
+        """
+        try:
+            from .export import get_export_summary, check_export_permission
+            from apps.subscriptions.exceptions import FeatureNotAvailable
+            from datetime import datetime
+            
+            # Check export permission
+            check_export_permission(request.user)
+            
+            date_from = None
+            date_to = None
+            
+            date_from_str = request.query_params.get('date_from', None)
+            date_to_str = request.query_params.get('date_to', None)
+            
+            if date_from_str:
+                try:
+                    date_from = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+                except ValueError:
+                    return Response({
+                        'status': 'error',
+                        'data': None,
+                        'message': 'Invalid date_from format. Use YYYY-MM-DD'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if date_to_str:
+                try:
+                    date_to = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+                except ValueError:
+                    return Response({
+                        'status': 'error',
+                        'data': None,
+                        'message': 'Invalid date_to format. Use YYYY-MM-DD'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            summary = get_export_summary(
+                user=request.user,
+                date_from=date_from,
+                date_to=date_to
+            )
+            
+            return Response({
+                'status': 'success',
+                'data': summary,
+                'message': 'Export summary retrieved successfully'
+            }, status=status.HTTP_200_OK)
+        except FeatureNotAvailable as e:
+            logger.info(f"Export feature not available for user {request.user.id}: {e}")
+            return Response(e.to_dict(), status=e.status_code)
+        except Exception as e:
+            logger.error(f"Error getting export summary: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'Failed to get export summary'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @action(detail=False, methods=['post'])

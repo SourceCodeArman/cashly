@@ -1,6 +1,7 @@
 """
 Celery tasks for transaction processing.
 """
+import json
 from collections import defaultdict
 from celery import shared_task
 from django.utils import timezone
@@ -137,42 +138,102 @@ def _sync_account_transactions_impl(account_id):
             # Determine transaction type first (needed for fallback)
             transaction_type = 'expense' if normalized_data['amount'] < 0 else 'income'
 
-            if plaid_auto_categorize and plaid_category:
+            # DEBUG: Log raw Plaid transaction data for first few transactions
+            merchant_name = normalized_data.get('merchant_name', 'Unknown')
+            if created_count + updated_count < 5:  # Log first 5 transactions
+                logger.info(
+                    f"[PLAID RAW DATA] Transaction #{created_count + updated_count + 1}:\n"
+                    f"  Merchant: {merchant_name}\n"
+                    f"  Amount: {normalized_data['amount']}\n"
+                    f"  Transaction Type (from amount): {transaction_type}\n"
+                    f"  Plaid Category (normalized): {plaid_category}\n"
+                    f"  Raw Plaid Transaction: {json.dumps(plaid_txn, default=str, indent=2) if created_count + updated_count < 2 else '...'}"
+                )
+
+            # Check if Plaid category exists and has data
+            has_plaid_category = (
+                plaid_category and 
+                isinstance(plaid_category, dict) and 
+                (plaid_category.get('primary') or plaid_category.get('detailed'))
+            )
+
+            if plaid_auto_categorize and has_plaid_category:
                 # Map category using cached mapping dictionaries
                 primary = plaid_category.get('primary')
                 detailed = plaid_category.get('detailed')
                 
                 category_name = None
-                category_type = transaction_type
+                mapped_type = None
                 
                 # Try detailed category first (more specific)
                 if detailed and detailed in PLAID_DETAILED_CATEGORY_MAPPING:
                     category_name, mapped_type = PLAID_DETAILED_CATEGORY_MAPPING[detailed]
-                    # Ensure type matches transaction type
-                    if mapped_type != transaction_type:
-                        category_name = "Other Expenses" if transaction_type == 'expense' else "Other Income"
+                    logger.info(
+                        f"[CATEGORIZATION] Found detailed mapping: {detailed} -> {category_name} ({mapped_type}) "
+                        f"for transaction: {normalized_data.get('merchant_name', 'Unknown')}, "
+                        f"amount: {normalized_data['amount']}, transaction_type: {transaction_type}"
+                    )
                 # Fall back to primary category
                 elif primary and primary in PLAID_PRIMARY_CATEGORY_MAPPING:
                     category_name, mapped_type = PLAID_PRIMARY_CATEGORY_MAPPING[primary]
-                    if mapped_type != transaction_type:
-                        category_name = "Other Expenses" if transaction_type == 'expense' else "Other Income"
+                    logger.info(
+                        f"[CATEGORIZATION] Found primary mapping: {primary} -> {category_name} ({mapped_type}) "
+                        f"for transaction: {normalized_data.get('merchant_name', 'Unknown')}, "
+                        f"amount: {normalized_data['amount']}, transaction_type: {transaction_type}"
+                    )
+                else:
+                    logger.warning(
+                        f"[CATEGORIZATION] No mapping found for Plaid category: primary={primary}, detailed={detailed} "
+                        f"for transaction: {normalized_data.get('merchant_name', 'Unknown')}"
+                    )
                 
-                # Get category from cache
-                if category_name:
+                # Use mapped_type from Plaid category mapping
+                if category_name and mapped_type:
+                    category_type = mapped_type
+                    
+                    # Get category from cache using the mapped type
+                    system_category = categories_by_name_type.get((category_name, category_type))
+                    
+                    if system_category:
+                        logger.info(
+                            f"[CATEGORIZATION] ✓ Successfully mapped '{normalized_data.get('merchant_name', 'Unknown')}' "
+                            f"to category: {category_name} ({category_type})"
+                        )
+                    else:
+                        logger.error(
+                            f"[CATEGORIZATION] ✗ Category '{category_name}' ({category_type}) NOT FOUND in cache! "
+                            f"Transaction: {normalized_data.get('merchant_name', 'Unknown')}, "
+                            f"Plaid: primary={primary}, detailed={detailed}. "
+                            f"Available categories: {sorted(list(categories_by_name_type.keys()))}"
+                        )
+                elif category_name:
+                    # Category name found but no mapped_type (shouldn't happen, but handle it)
+                    category_type = transaction_type
                     system_category = categories_by_name_type.get((category_name, category_type))
                     if not system_category:
                         logger.warning(
-                            f"Category '{category_name}' ({category_type}) not found in cache. "
-                            f"Available categories: {list(categories_by_name_type.keys())}"
+                            f"[CATEGORIZATION] Category '{category_name}' ({category_type}) not found in cache "
+                            f"(no mapped_type available)"
+                        )
+            elif plaid_auto_categorize:
+                # Plaid auto-categorize is enabled but no Plaid category data
+                logger.warning(
+                    f"[CATEGORIZATION] No Plaid category data for transaction: {normalized_data.get('merchant_name', 'Unknown')}, "
+                    f"plaid_category: {plaid_category}"
                         )
 
             # ALWAYS assign a default category if none was found
             if not system_category:
+                logger.warning(
+                    f"[CATEGORIZATION] Using DEFAULT category '{'Other Expenses' if transaction_type == 'expense' else 'Other Income'}' "
+                    f"for transaction: {normalized_data.get('merchant_name', 'Unknown')}, "
+                    f"type: {transaction_type}, Plaid category: {plaid_category}"
+                )
                 system_category = other_expense if transaction_type == 'expense' else other_income
                 if not system_category:
                     # Log error if default categories don't exist
                     logger.error(
-                        f"Default 'Other Expenses'/'Other Income' category not found for {transaction_type}. "
+                        f"[CATEGORIZATION] ✗ Default 'Other Expenses'/'Other Income' category not found for {transaction_type}. "
                         f"Please run 'python manage.py create_system_categories'"
                     )
 
