@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 
 from .models import Budget
 from .serializers import BudgetSerializer, BudgetCreateSerializer
+from .utils import calculate_budget_usage
 from apps.transactions.models import Transaction, Category
 from apps.api.permissions import IsOwnerOrReadOnly
 
@@ -133,7 +134,7 @@ class BudgetViewSet(viewsets.ModelViewSet):
                 if budget_id:
                     try:
                         budget = Budget.objects.get(budget_id=budget_id, user=request.user)
-                        usage = self._calculate_budget_usage(budget)
+                        usage = calculate_budget_usage(budget)
                         budget_data['usage'] = usage
                     except Budget.DoesNotExist:
                         pass
@@ -149,7 +150,7 @@ class BudgetViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         serializer = self.get_serializer(instance)
         
-        usage = self._calculate_budget_usage(instance)
+        usage = calculate_budget_usage(instance)
         
         return Response({
             'status': 'success',
@@ -159,45 +160,6 @@ class BudgetViewSet(viewsets.ModelViewSet):
             },
             'message': 'Budget retrieved successfully'
         }, status=status.HTTP_200_OK)
-    
-    def _calculate_budget_usage(self, budget):
-        """Calculate budget usage and remaining amount."""
-        # Get transactions for this category within the budget period
-        transactions = Transaction.objects.filter(
-            user=budget.user,
-            category=budget.category,
-            date__gte=budget.period_start,
-            date__lte=budget.period_end,
-            amount__lt=0  # Only expenses
-        )
-        
-        # Apply subscription transaction history limit if applicable
-        try:
-            from apps.subscriptions.limit_service import SubscriptionLimitService
-            from apps.subscriptions.exceptions import SubscriptionExpired
-            
-            history_limit = SubscriptionLimitService.get_transaction_history_limit(budget.user)
-            
-            if history_limit is not None:
-                min_date = timezone.now().date() - history_limit
-                transactions = transactions.filter(date__gte=min_date)
-        except SubscriptionExpired:
-            min_date = timezone.now().date() - timedelta(days=30)
-            transactions = transactions.filter(date__gte=min_date)
-        except Exception:
-            pass
-        
-        spent = abs(transactions.aggregate(total=Sum('amount'))['total'] or 0)
-        remaining = max(0, float(budget.amount) - spent)
-        percentage_used = (spent / float(budget.amount) * 100) if budget.amount > 0 else 0
-        
-        return {
-            'spent': f"{spent:.2f}",
-            'remaining': f"{remaining:.2f}",
-            'percentage_used': round(percentage_used, 2),
-            'is_over_budget': spent > float(budget.amount),
-            'alert_threshold_reached': percentage_used >= float(budget.alert_threshold)
-        }
     
     @action(detail=False, methods=['get'], url_path='usage-summary')
     def usage_summary(self, request):
@@ -209,7 +171,7 @@ class BudgetViewSet(viewsets.ModelViewSet):
         
         summary = []
         for budget in budgets:
-            usage = self._calculate_budget_usage(budget)
+            usage = calculate_budget_usage(budget)
             summary.append({
                 'budget_id': str(budget.budget_id),
                 'category_name': budget.category.name,

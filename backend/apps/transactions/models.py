@@ -198,6 +198,10 @@ class Transaction(models.Model):
         default=False,
         help_text="Whether user manually edited this transaction"
     )
+    is_recurring_dismissed = models.BooleanField(
+        default=False,
+        help_text="User explicitly dismissed recurring status"
+    )
     
     objects = TransactionManager()
     
@@ -223,3 +227,71 @@ class Transaction(models.Model):
     def is_income(self):
         """Check if transaction is income."""
         return self.amount > 0
+
+
+class TransactionSplit(models.Model):
+    """
+    Model for splitting transactions across multiple categories.
+    """
+    split_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name='splits'
+    )
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.PROTECT,
+        related_name='transaction_splits'
+    )
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="Amount for this split"
+    )
+    description = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Optional description for this split"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'transaction_splits'
+        verbose_name = 'Transaction Split'
+        verbose_name_plural = 'Transaction Splits'
+        ordering = ['created_at']
+    
+    def __str__(self):
+        return f"Split: {self.category.name} - {self.amount}"
+
+
+class Receipt(models.Model):
+    """
+    Model for storing receipt images/PDFs associated with transactions.
+    """
+    receipt_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    transaction = models.ForeignKey(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name='receipts'
+    )
+    file = models.FileField(
+        upload_to='receipts/%Y/%m/%d/',
+        max_length=500,
+        help_text="Receipt file (image or PDF)"
+    )
+    file_name = models.CharField(max_length=255)
+    file_size = models.IntegerField(help_text="File size in bytes")
+    content_type = models.CharField(max_length=100)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'receipts'
+        verbose_name = 'Receipt'
+        verbose_name_plural = 'Receipts'
+        ordering = ['-uploaded_at']
+    
+    def __str__(self):
+        return f"Receipt for {self.transaction} - {self.file_name}"

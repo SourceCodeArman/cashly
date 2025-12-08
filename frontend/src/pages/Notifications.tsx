@@ -1,4 +1,4 @@
-import { Bell, Check, CheckCheck, Trash2 } from 'lucide-react'
+import { Bell, Check, CheckCheck, Trash2, Settings } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,12 +11,15 @@ import {
 } from '@/hooks/useNotifications'
 import { formatRelativeTime } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { useState } from 'react'
+import { NotificationPreferencesModal } from '@/components/notifications/NotificationPreferencesModal'
 
 export function Notifications() {
   const { data: notificationsData, isLoading } = useNotifications()
   const markAsRead = useMarkNotificationAsRead()
   const markAllAsRead = useMarkAllNotificationsAsRead()
   const deleteNotification = useDeleteNotification()
+  const [showPreferences, setShowPreferences] = useState(false)
 
   const notifications = notificationsData?.results || []
 
@@ -67,6 +70,11 @@ export function Notifications() {
 
   return (
     <div className="space-y-6">
+      <NotificationPreferencesModal
+        open={showPreferences}
+        onOpenChange={setShowPreferences}
+      />
+
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div className="space-y-2">
@@ -75,12 +83,18 @@ export function Notifications() {
             View and manage your notifications
           </p>
         </div>
-        {notifications.length > 0 && (
-          <Button variant="outline" onClick={handleMarkAllAsRead} disabled={markAllAsRead.isPending}>
-            <CheckCheck className="mr-2 h-4 w-4" />
-            Mark All Read
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setShowPreferences(true)}>
+            <Settings className="mr-2 h-4 w-4" />
+            Preferences
           </Button>
-        )}
+          {notifications.length > 0 && (
+            <Button variant="outline" onClick={handleMarkAllAsRead} disabled={markAllAsRead.isPending}>
+              <CheckCheck className="mr-2 h-4 w-4" />
+              Mark All Read
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Notifications List */}

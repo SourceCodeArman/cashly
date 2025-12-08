@@ -1,4 +1,5 @@
 // User types
+export * from './bill.types'
 export interface User {
   id: string
   email: string
@@ -9,6 +10,7 @@ export interface User {
   subscription?: Subscription
   createdAt?: string
   updatedAt?: string
+  mfaEnabled?: boolean
 }
 
 // Account types
@@ -69,6 +71,7 @@ export interface Goal {
   deadline?: string
   goalType: string
   isActive: boolean
+  isCompleted?: boolean
   progress?: number
   createdAt?: string
   updatedAt?: string
@@ -83,6 +86,25 @@ export interface Notification {
   isRead: boolean
   createdAt: string
   updatedAt?: string
+}
+
+export interface NotificationPreferences {
+  email_transaction: boolean
+  email_goal: boolean
+  email_budget: boolean
+  email_account: boolean
+  email_system: boolean
+  push_transaction: boolean
+  push_goal: boolean
+  push_budget: boolean
+  push_account: boolean
+  push_system: boolean
+}
+
+export interface PasswordChangeData {
+  old_password: string
+  new_password: string
+  new_password_confirm: string
 }
 
 // Subscription types
@@ -131,7 +153,7 @@ export interface SubscriptionTier {
 
 // API Response types
 export interface ApiResponse<T> {
-  status: 'success' | 'error'
+  status: 'success' | 'error' | 'mfa_required'
   data: T | null
   message?: string
   errors?: Record<string, string[]>
@@ -446,22 +468,50 @@ export interface AdminEndpointStats {
   endpoint: string
   method: string
   count: number
-  totalTime: number
+  totalTime?: number
   errorCount: number
   lastRequest?: string
   avgResponseTime: number
   errorRate: number
 }
 
+export interface AdminHourlyData {
+  hour: string
+  requests: number
+  errors: number
+}
+
+export interface AdminMethodDistribution {
+  method: string
+  count: number
+}
+
 export interface AdminAPIAnalytics {
   summary: {
-    totalRequests: number
-    totalErrors: number
+    totalRequests24h: number
+    totalRequests7d: number
+    totalErrors24h: number
     errorRate: number
     avgResponseTimeMs: number
+    requestsPerSecond: number
   }
+  hourlyData: AdminHourlyData[]
   endpoints: Record<string, AdminEndpointStats>
   topEndpoints: AdminEndpointStats[]
+  statusBreakdown: {
+    '2xx': number
+    '3xx': number
+    '4xx': number
+    '5xx': number
+  }
+  responseTimePercentiles: {
+    p50: number
+    p75: number
+    p90: number
+    p95: number
+    p99: number
+  }
+  methodDistribution: AdminMethodDistribution[]
 }
 
 // Integration Types

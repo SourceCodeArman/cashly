@@ -86,18 +86,6 @@ export interface PaymentMethodSummary {
   country?: string
 }
 
-type PaymentMethodApiShape = {
-  id: string
-  brand?: string
-  last4?: string
-  exp_month?: number
-  exp_year?: number
-  expMonth?: number
-  expYear?: number
-  funding?: string
-  country?: string
-}
-
 export interface SubscriptionConfig {
   publishableKey: string
   currency: string
@@ -196,61 +184,34 @@ export const subscriptionService = {
     }
   },
 
-  async createSubscription(
-    payload: CreateSubscriptionRequest
-  ): Promise<ApiResponse<SubscriptionWithClientSecret>> {
-    const response = await apiClient.post<
-      ApiResponse<(SubscriptionApi & { client_secret?: string }) | null>
-    >('/subscriptions/create/', {
-      plan: payload.plan,
-      billing_cycle: payload.billingCycle,
-      payment_method_id: payload.paymentMethodId,
-      trial_enabled: payload.trialEnabled ?? false,
-    })
-
-    const result = response.data
-
-    if (result.status === 'success' && result.data) {
-      const { client_secret, ...subscription } = result.data
-      return {
-        status: 'success',
-        data: {
-          ...normalizeSubscription(subscription),
-          clientSecret: client_secret ?? undefined,
-        },
-        message: result.message,
+  async createCheckoutSession(
+    plan: string,
+    billingCycle: string,
+    successUrl: string,
+    cancelUrl: string
+  ): Promise<ApiResponse<{ id: string; url: string }>> {
+    const response = await apiClient.post<ApiResponse<{ id: string; url: string }>>(
+      '/subscriptions/checkout-session/',
+      {
+        plan,
+        billing_cycle: billingCycle,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
       }
-    }
-
-    return {
-      status: result.status,
-      data: null,
-      message: result.message,
-      errors: result.errors,
-    }
+    )
+    return response.data
   },
 
-  async updateSubscription(
-    id: string,
-    data: Partial<Subscription>
-  ): Promise<ApiResponse<Subscription>> {
-    const response = await apiClient.patch<ApiResponse<SubscriptionApi>>(`/subscriptions/${id}/`, data)
-    const payload = response.data
-
-    if (payload.status === 'success' && payload.data) {
-      return {
-        status: 'success',
-        data: normalizeSubscription(payload.data),
-        message: payload.message,
+  async createPortalSession(
+    returnUrl: string
+  ): Promise<ApiResponse<{ id: string; url: string }>> {
+    const response = await apiClient.post<ApiResponse<{ id: string; url: string }>>(
+      '/subscriptions/portal-session/',
+      {
+        return_url: returnUrl,
       }
-    }
-
-    return {
-      status: payload.status,
-      data: payload.data ? normalizeSubscription(payload.data) : null,
-      message: payload.message,
-      errors: payload.errors,
-    }
+    )
+    return response.data
   },
 
   async cancelSubscription(
@@ -401,35 +362,6 @@ export const subscriptionService = {
     }
   },
 
-  async getPaymentMethod(): Promise<ApiResponse<PaymentMethodSummary | null>> {
-    const response = await apiClient.get<ApiResponse<PaymentMethodSummary | null>>(
-      '/subscriptions/payment-method/'
-    )
-    if (response.data.status === 'success' && response.data.data) {
-      return {
-        status: 'success',
-        data: normalizePaymentMethodSummary(response.data.data),
-        message: response.data.message,
-      }
-    }
-    return response.data
-  },
-
-  async updatePaymentMethod(paymentMethodId: string): Promise<ApiResponse<PaymentMethodSummary | null>> {
-    const response = await apiClient.post<ApiResponse<PaymentMethodSummary | null>>(
-      '/subscriptions/payment-method/update/',
-      { payment_method_id: paymentMethodId }
-    )
-    if (response.data.status === 'success' && response.data.data) {
-      return {
-        status: 'success',
-        data: normalizePaymentMethodSummary(response.data.data),
-        message: response.data.message,
-      }
-    }
-    return response.data
-  },
-
   async keepSubscription(id: string): Promise<ApiResponse<Subscription>> {
     const response = await apiClient.post<ApiResponse<SubscriptionApi>>(
       `/subscriptions/${id}/keep-current-plan/`
@@ -454,14 +386,3 @@ export const subscriptionService = {
 }
 
 export type { CreateSubscriptionRequest, SubscriptionWithClientSecret }
-
-const normalizePaymentMethodSummary = (data: PaymentMethodApiShape): PaymentMethodSummary => ({
-  id: data.id,
-  brand: data.brand,
-  last4: data.last4,
-  expMonth: data.exp_month ?? data.expMonth,
-  expYear: data.exp_year ?? data.expYear,
-  funding: data.funding,
-  country: data.country,
-})
-

@@ -545,3 +545,90 @@ def retrieve_customer(customer_id: str) -> Dict:
         logger.error(f"Failed to retrieve customer {customer_id}: {e}")
         raise StripeIntegrationError(f"Failed to retrieve customer: {str(e)}")
 
+
+def create_checkout_session(
+    customer_id: str,
+    price_id: str,
+    success_url: str,
+    cancel_url: str,
+    client_reference_id: Optional[str] = None,
+    allow_promotion_codes: bool = True,
+    trial_period_days: Optional[int] = None
+) -> Dict:
+    """
+    Create a Stripe Checkout Session for a new subscription.
+
+    Args:
+        customer_id: Stripe customer ID
+        price_id: Stripe price ID
+        success_url: URL to redirect to after successful payment
+        cancel_url: URL to redirect to after cancelled payment
+        client_reference_id: Optional reference ID (e.g., user ID)
+        allow_promotion_codes: Whether to allow promotion codes
+        trial_period_days: Optional trial period in days
+
+    Returns:
+        Dictionary with session data (id, url)
+    """
+    try:
+        client = get_stripe_client()
+
+        session_params = {
+            'customer': customer_id,
+            'mode': 'subscription',
+            'payment_method_types': ['card'],
+            'line_items': [{
+                'price': price_id,
+                'quantity': 1,
+            }],
+            'success_url': success_url,
+            'cancel_url': cancel_url,
+            'client_reference_id': client_reference_id,
+            'allow_promotion_codes': allow_promotion_codes,
+        }
+
+        if trial_period_days:
+            session_params['subscription_data'] = {
+                'trial_period_days': trial_period_days
+            }
+
+        session = client.checkout.Session.create(**session_params)
+
+        return {
+            'id': session.id,
+            'url': session.url,
+        }
+
+    except stripe.StripeError as e:
+        logger.error(f"Failed to create checkout session for customer {customer_id}: {e}")
+        raise StripeIntegrationError(f"Failed to create checkout session: {str(e)}")
+
+
+def create_portal_session(customer_id: str, return_url: str) -> Dict:
+    """
+    Create a Stripe Billing Portal Session.
+
+    Args:
+        customer_id: Stripe customer ID
+        return_url: URL to redirect to after exiting the portal
+
+    Returns:
+        Dictionary with session data (id, url)
+    """
+    try:
+        client = get_stripe_client()
+
+        session = client.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=return_url,
+        )
+
+        return {
+            'id': session.id,
+            'url': session.url,
+        }
+
+    except stripe.StripeError as e:
+        logger.error(f"Failed to create portal session for customer {customer_id}: {e}")
+        raise StripeIntegrationError(f"Failed to create portal session: {str(e)}")
+

@@ -18,6 +18,7 @@ from .admin_views import (
     AdminDebugTriggerSyncView,
     AdminDebugClearCacheView,
     AdminDebugTestEndpointsView,
+    AdminUserTrialManageView,
 )
 
 urlpatterns = [
@@ -53,4 +54,7 @@ urlpatterns = [
     path('users/<int:user_id>/transactions/', AdminUserTransactionsView.as_view(), name='admin-user-transactions'),
     path('users/<int:user_id>/goals/', AdminUserGoalsView.as_view(), name='admin-user-goals'),
     path('users/<int:user_id>/budgets/', AdminUserBudgetsView.as_view(), name='admin-user-budgets'),
+    
+    # Trial management
+    path('users/<int:user_id>/trial/', AdminUserTrialManageView.as_view(), name='admin-user-trial'),
 ]

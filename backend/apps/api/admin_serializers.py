@@ -382,3 +382,8 @@ class AdminTestEndpointsSerializer(serializers.Serializer):
     plaid = AdminPlaidTestSerializer()
     stripe = AdminStripeTestSerializer()
 
+
+class AdminUserTrialManageSerializer(serializers.Serializer):
+    """Serializer for managing user trial status."""
+    trialEnd = serializers.DateTimeField(required=True)
+

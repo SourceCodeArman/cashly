@@ -191,3 +191,27 @@ class AccountSelectionSerializer(serializers.Serializer):
         return attrs
 
 
+
+class CreateCheckoutSessionSerializer(serializers.Serializer):
+    """Serializer for creating a Stripe Checkout Session."""
+    plan = serializers.ChoiceField(
+        choices=['premium', 'pro', 'enterprise'],
+        help_text="Subscription plan"
+    )
+    billing_cycle = serializers.ChoiceField(
+        choices=['monthly', 'annual'],
+        help_text="Billing cycle"
+    )
+    success_url = serializers.URLField(
+        help_text="URL to redirect to after successful payment"
+    )
+    cancel_url = serializers.URLField(
+        help_text="URL to redirect to after cancelled payment"
+    )
+
+
+class CreatePortalSessionSerializer(serializers.Serializer):
+    """Serializer for creating a Stripe Billing Portal Session."""
+    return_url = serializers.URLField(
+        help_text="URL to redirect to after exiting the portal"
+    )

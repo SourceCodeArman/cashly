@@ -1,16 +1,20 @@
 import * as React from "react"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { AnimatePresence, motion } from "framer-motion"
 
 interface CollapsibleProps {
     children: React.ReactNode
     className?: string
     defaultOpen?: boolean
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
 }
 
 interface CollapsibleTriggerProps {
     children: React.ReactNode
     className?: string
+    showChevron?: boolean
 }
 
 interface CollapsibleContentProps {
@@ -26,12 +30,19 @@ const CollapsibleContext = React.createContext<{
     toggle: () => { },
 })
 
-export function Collapsible({ children, className, defaultOpen = false }: CollapsibleProps) {
-    const [isOpen, setIsOpen] = React.useState(defaultOpen)
+export function Collapsible({ children, className, defaultOpen = false, open, onOpenChange }: CollapsibleProps) {
+    const [isOpenInternal, setIsOpenInternal] = React.useState(defaultOpen)
+
+    // Use controlled state if open prop is provided, otherwise use internal state
+    const isOpen = open !== undefined ? open : isOpenInternal
 
     const toggle = React.useCallback(() => {
-        setIsOpen(prev => !prev)
-    }, [])
+        if (onOpenChange) {
+            onOpenChange(!isOpen)
+        } else {
+            setIsOpenInternal(prev => !prev)
+        }
+    }, [isOpen, onOpenChange])
 
     return (
         <CollapsibleContext.Provider value={{ isOpen, toggle }}>
@@ -42,7 +53,7 @@ export function Collapsible({ children, className, defaultOpen = false }: Collap
     )
 }
 
-export function CollapsibleTrigger({ children, className }: CollapsibleTriggerProps) {
+export function CollapsibleTrigger({ children, className, showChevron = true }: CollapsibleTriggerProps) {
     const { isOpen, toggle } = React.useContext(CollapsibleContext)
 
     return (
@@ -51,16 +62,19 @@ export function CollapsibleTrigger({ children, className }: CollapsibleTriggerPr
             onClick={toggle}
             className={cn(
                 "flex w-full items-center justify-between rounded-md p-4 text-left font-medium transition-colors hover:bg-muted/50",
+                !showChevron && "p-0", // Remove default padding if no chevron
                 className
             )}
         >
             {children}
-            <ChevronDown
-                className={cn(
-                    "h-5 w-5 transition-transform duration-200",
-                    isOpen && "rotate-180"
-                )}
-            />
+            {showChevron && (
+                <ChevronDown
+                    className={cn(
+                        "h-5 w-5 transition-transform duration-200",
+                        isOpen && "rotate-180"
+                    )}
+                />
+            )}
         </button>
     )
 }
@@ -68,11 +82,25 @@ export function CollapsibleTrigger({ children, className }: CollapsibleTriggerPr
 export function CollapsibleContent({ children, className }: CollapsibleContentProps) {
     const { isOpen } = React.useContext(CollapsibleContext)
 
-    if (!isOpen) return null
-
     return (
-        <div className={cn("px-4 pb-4", className)}>
-            {children}
-        </div>
+        <AnimatePresence initial={false}>
+            {isOpen && (
+                <motion.div
+                    initial="collapsed"
+                    animate="open"
+                    exit="collapsed"
+                    variants={{
+                        open: { opacity: 1, height: "auto" },
+                        collapsed: { opacity: 0, height: 0 }
+                    }}
+                    transition={{ duration: 0.3, ease: [0.04, 0.62, 0.23, 0.98] }}
+                    className="overflow-hidden"
+                >
+                    <div className={cn("px-4 pb-4", className)}>
+                        {children}
+                    </div>
+                </motion.div>
+            )}
+        </AnimatePresence>
     )
 }

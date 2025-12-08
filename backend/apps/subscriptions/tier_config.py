@@ -88,7 +88,7 @@ def _tier_definitions() -> List[TierDefinition]:
             description='Unlock advanced planning tools for growing households.',
             monthly_price=12.99,
             monthly_price_id=settings.STRIPE_PRO_MONTHLY_PRICE_ID or '',
-            annual_price=99.0,
+            annual_price=129.99,
             annual_price_id=settings.STRIPE_PRO_ANNUAL_PRICE_ID or '',
             features=[
                 'Up to 10 connected accounts',

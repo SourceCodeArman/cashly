@@ -10,6 +10,8 @@ from .services import (
     sync_all_goals_for_user,
     process_contribution_rules,
     sync_destination_account_balance,
+    process_savings_rules_for_transaction,
+    process_pending_savings_for_user,
 )
 from django.utils import timezone
 from datetime import timedelta
@@ -334,6 +336,80 @@ def send_cash_goal_reminders_task():
         return results
     except Exception as e:
         logger.error(f"Error in send_cash_goal_reminders_task: {e}")
+        return {
+            'status': 'error',
+            'message': str(e),
+        }
+
+
+@shared_task
+def process_savings_rules_for_transaction_task(transaction_id: str):
+    """
+    Celery task to process savings rules for a transaction.
+    
+    Args:
+        transaction_id: UUID string of the transaction to process
+        
+    Returns:
+        dict: Task result
+    """
+    try:
+        from apps.transactions.models import Transaction
+        transaction = Transaction.objects.get(transaction_id=transaction_id)
+        
+        # Process savings rules for transaction
+        contributions = process_savings_rules_for_transaction(transaction)
+        
+        return {
+            'status': 'success',
+            'transaction_id': str(transaction_id),
+            'contributions_created': len(contributions),
+            'contribution_ids': [str(c.contribution_id) for c in contributions],
+        }
+    except Transaction.DoesNotExist:
+        return {
+            'status': 'error',
+            'message': f'Transaction {transaction_id} not found',
+        }
+    except Exception as e:
+        logger.error(f"Error processing savings rules for transaction {transaction_id}: {e}", exc_info=True)
+        return {
+            'status': 'error',
+            'message': str(e),
+        }
+
+
+@shared_task
+def process_pending_savings_for_user_task(user_id: int, lookback_days: int = 30):
+    """
+    Celery task to process pending savings for a user's recent transactions.
+    Useful for backfilling or reprocessing savings rules.
+    
+    Args:
+        user_id: ID of the user
+        lookback_days: Number of days to look back for transactions
+        
+    Returns:
+        dict: Task result
+    """
+    try:
+        user = User.objects.get(id=user_id)
+        
+        # Process pending savings
+        results = process_pending_savings_for_user(user, lookback_days)
+        
+        return {
+            'status': 'success',
+            'user_id': user_id,
+            **results
+        }
+    except User.DoesNotExist:
+        return {
+            'status': 'error',
+            'message': f'User {user_id} not found',
+        }
+    except Exception as e:
+        logger.error(f"Error processing pending savings for user {user_id}: {e}", exc_info=True)
         return {
             'status': 'error',
             'message': str(e),

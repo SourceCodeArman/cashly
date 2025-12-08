@@ -1,25 +1,19 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { CreditCard, Check } from 'lucide-react'
+import { CreditCard, Check, Loader2, ExternalLink } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   useSubscriptions,
-  useCancelSubscription,
   useSubscriptionConfig,
-  useKeepSubscription,
-  useUpdateAccountSelection,
 } from '@/hooks/useSubscription'
-import { useAccounts } from '@/hooks/useAccounts'
 import { formatDate, cn } from '@/lib/utils'
 import type { BillingCycle, SubscriptionTier } from '@/types'
-import { SubscriptionCheckoutDialog } from '@/components/subscription/SubscriptionCheckoutDialog'
-import { SubscriptionCancelDialog } from '@/components/subscription/SubscriptionCancelDialog'
-import { SubscriptionManageDialog } from '@/components/subscription/SubscriptionManageDialog'
-import { AccountSelectionDialog } from '@/components/subscription/AccountSelectionDialog'
 import { subscriptionService } from '@/services/subscriptionService'
+import { toast } from 'sonner'
 
 const FALLBACK_TIERS: SubscriptionTier[] = [
   {
@@ -61,8 +55,6 @@ const FALLBACK_TIERS: SubscriptionTier[] = [
       'Advanced analytics & insights',
       'Custom categories & budgets',
       'Goal tracking & forecasting',
-      'Export to CSV/PDF',
-      'Priority support',
       'Unlimited transaction history',
     ],
     badge: 'Most popular',
@@ -76,8 +68,8 @@ const FALLBACK_TIERS: SubscriptionTier[] = [
       },
       {
         id: 'annual',
-        price: 99.0,
-        priceDisplay: '$99.00',
+        price: 129.99,
+        priceDisplay: '$129.99',
         priceId: 'price_1SU4sS9FH3KQIIeTUG3QLP7T_annual',
         currency: 'usd',
       },
@@ -118,208 +110,93 @@ const FALLBACK_TIERS: SubscriptionTier[] = [
       },
     ],
   },
-  // Enterprise tier hidden for now
 ]
 
 export function Subscription() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { data: subscriptions, isLoading } = useSubscriptions()
   const { data: subscriptionConfig, isLoading: isConfigLoading } = useSubscriptionConfig()
-  const cancelSubscription = useCancelSubscription()
-  const keepSubscriptionMutation = useKeepSubscription()
-  const updateAccountSelection = useUpdateAccountSelection()
-  const { data: accounts } = useAccounts()
+
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
 
   const currentSubscription = subscriptions?.[0]
   const activeTier = currentSubscription ? currentSubscription.plan : 'free'
   const tiers = subscriptionConfig?.tiers ?? FALLBACK_TIERS
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
-  const [checkoutTier, setCheckoutTier] = useState<SubscriptionTier | null>(null)
-  const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
-  const [dialogMode, setDialogMode] = useState<'new' | 'manage'>('new')
-  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false)
-  const [isManageDialogOpen, setIsManageDialogOpen] = useState(false)
-  const [isAccountSelectionOpen, setIsAccountSelectionOpen] = useState(false)
-  const [accountSelectionData, setAccountSelectionData] = useState<{
-    accounts: Array<{ account_id: string; institution_name: string; custom_name?: string | null; account_type: string; balance: string; account_number_masked?: string | null }>
-    excessCount: number
-    freeLimit: number
-    initialSelection?: string[]
-    hasSelection?: boolean
-  } | null>(null)
+
+  const [isRedirecting, setIsRedirecting] = useState(false)
 
   const canUpgrade = Boolean(subscriptionConfig?.publishableKey)
-  const hasActiveSubscription = Boolean(
-    currentSubscription && ['active', 'trialing'].includes(currentSubscription.status)
-  )
-  const currentTier = useMemo(
-    () => tiers.find((tier) => tier.id === currentSubscription?.plan) ?? null,
-    [tiers, currentSubscription?.plan]
-  )
 
-  // Handle auto-opening checkout modal from query parameters
+  // Handle auto-opening checkout from query parameters (redirect immediately)
   useEffect(() => {
     const shouldCheckout = searchParams.get('checkout') === 'true'
     const tierParam = searchParams.get('tier')
-    const cycleParam = searchParams.get('cycle') as BillingCycle | null
+
+    // Attempt to read billing cycle from params, default to state
+    const cycleParam = searchParams.get('cycle')
+    if (cycleParam === 'annual' || cycleParam === 'monthly') {
+      setBillingCycle(cycleParam)
+    }
 
     if (shouldCheckout && tierParam && tiers.length > 0) {
       const selectedTier = tiers.find((t) => t.id === tierParam)
       if (selectedTier && selectedTier.id !== 'free') {
-        setCheckoutTier(selectedTier)
-        setBillingCycle(cycleParam || 'monthly')
-        setDialogMode('new')
-        setIsCheckoutOpen(true)
-
-        // Clear query parameters after setting state
+        // Clear params
         setSearchParams({})
+        // Trigger checkout
+        handleSelectTier(selectedTier)
       }
     }
   }, [searchParams, tiers, setSearchParams])
 
-  const handleCancel = async () => {
-    if (!currentSubscription) return
+  const handleSelectTier = async (tier: SubscriptionTier) => {
+    // If downgrading to free, or if user is on free and clicks manage (which shouldn't happen via this handler based on logic, but safety first)
+    if (tier.id === 'free') {
+      handlePortalRedirect()
+      return
+    }
 
+    setIsRedirecting(true)
     try {
-      const result = await cancelSubscription.mutateAsync({ id: currentSubscription.subscriptionId })
+      const successUrl = window.location.href
+      const cancelUrl = window.location.href
 
-      // Check if account selection is required
-      if (
-        result &&
-        typeof result === 'object' &&
-        'accountSelectionRequired' in result &&
-        result.accountSelectionRequired === true &&
-        'accounts' in result &&
-        Array.isArray(result.accounts)
-      ) {
-        setAccountSelectionData({
-          accounts: result.accounts || [],
-          excessCount: result.excessCount || 0,
-          freeLimit: result.freeLimit || 3,
-        })
-        setIsCancelDialogOpen(false)
-        setIsAccountSelectionOpen(true)
+      const response = await subscriptionService.createCheckoutSession(
+        tier.id,
+        billingCycle,
+        successUrl,
+        cancelUrl
+      )
+
+      if (response.status === 'success' && response.data) {
+        window.location.href = response.data.url
       } else {
-        setIsCancelDialogOpen(false)
+        toast.error('Failed to start checkout. Please try again.')
+        setIsRedirecting(false)
       }
     } catch (error) {
-      // Error is already handled by the mutation's onError
-      console.error('Failed to cancel subscription:', error)
-      setIsCancelDialogOpen(false)
+      console.error('Checkout error:', error)
+      toast.error('An error occurred. Please try again.')
+      setIsRedirecting(false)
     }
   }
 
-  const handleAccountSelectionConfirm = async (accountIds: string[]) => {
-    if (!currentSubscription) return
-
+  const handlePortalRedirect = async () => {
+    setIsRedirecting(true)
     try {
-      await cancelSubscription.mutateAsync({
-        id: currentSubscription.subscriptionId,
-        accountIds,
-      })
-      setIsAccountSelectionOpen(false)
-      setAccountSelectionData(null)
-    } catch (error) {
-      // Error is already handled by the mutation's onError
-      console.error('Failed to cancel subscription with account selection:', error)
-    }
-  }
+      const returnUrl = window.location.href
+      const response = await subscriptionService.createPortalSession(returnUrl)
 
-  const handleSelectTier = (tier: SubscriptionTier) => {
-    if (tier.id === 'free' || !canUpgrade) {
-      return
-    }
-
-    const isCurrentPlan = currentSubscription?.plan === tier.id
-    const fallbackCycle = tier.billingCycles[0]?.id ?? 'monthly'
-    setCheckoutTier(tier)
-    setDialogMode(isCurrentPlan ? 'manage' : 'new')
-    setBillingCycle(isCurrentPlan ? currentSubscription?.billingCycle ?? fallbackCycle : fallbackCycle)
-    setIsCheckoutOpen(true)
-  }
-
-  const handleManageSubscription = async () => {
-    if (!currentSubscription) {
-      return
-    }
-
-    // Check if user has excess accounts and downgrade is scheduled
-    const isDowngradeScheduled =
-      Boolean(currentSubscription?.cancelAtPeriodEnd) &&
-      (currentSubscription?.pendingPlan ? currentSubscription.pendingPlan === 'free' : true) &&
-      currentSubscription?.plan !== 'free'
-
-    if (isDowngradeScheduled && accounts) {
-      const activeAccounts = accounts.filter((acc) => acc.isActive !== false)
-      const freeLimit = 3
-
-      if (activeAccounts.length > freeLimit) {
-        // Fetch current account selection from backend
-        try {
-          const selectionResponse = await subscriptionService.getAccountSelection(
-            currentSubscription.subscriptionId
-          )
-
-          if (selectionResponse.status === 'success' && selectionResponse.data) {
-            const selectionData = selectionResponse.data
-
-            setAccountSelectionData({
-              accounts: selectionData.accounts,
-              excessCount: selectionData.excess_account_count,
-              freeLimit: selectionData.free_tier_limit,
-              initialSelection: selectionData.accounts_to_keep || [],
-              hasSelection: selectionData.has_selection,
-            })
-            setIsAccountSelectionOpen(true)
-            return
-          }
-        } catch (error) {
-          console.error('Failed to fetch account selection:', error)
-          // Fallback to using accounts from useAccounts hook
-        }
-
-        // Fallback: use accounts from hook if API call fails
-        const excessCount = activeAccounts.length - freeLimit
-
-        // Transform accounts to match AccountSelectionDialog format
-        const accountData = activeAccounts.map((acc) => ({
-          account_id: acc.id,
-          institution_name: acc.institutionName || 'Unknown',
-          custom_name: acc.name || null,
-          account_type: acc.accountType || '',
-          balance: acc.balance || '0',
-          account_number_masked: acc.maskedAccountNumber || null,
-        }))
-
-        setAccountSelectionData({
-          accounts: accountData,
-          excessCount,
-          freeLimit,
-          initialSelection: [],
-          hasSelection: false,
-        })
-        setIsAccountSelectionOpen(true)
-        return
+      if (response.status === 'success' && response.data) {
+        window.location.href = response.data.url
+      } else {
+        toast.error('Failed to open billing portal. Please try again.')
+        setIsRedirecting(false)
       }
-    }
-
-    // Default: open manage dialog
-    setIsManageDialogOpen(true)
-  }
-
-  const handleEditAccountSelectionConfirm = async (accountIds: string[]) => {
-    if (!currentSubscription) return
-
-    try {
-      await updateAccountSelection.mutateAsync({
-        subscriptionId: currentSubscription.subscriptionId,
-        accountIds,
-      })
-      setIsAccountSelectionOpen(false)
-      setAccountSelectionData(null)
     } catch (error) {
-      // Error is already handled by the mutation's onError
-      console.error('Failed to update account selection:', error)
+      console.error('Portal error:', error)
+      toast.error('An error occurred. Please try again.')
+      setIsRedirecting(false)
     }
   }
 
@@ -360,15 +237,6 @@ export function Subscription() {
         : `Renews on ${formatDate(currentSubscription.currentPeriodEnd)} `)
       : 'Pending schedule'
     : '—'
-  const canCancelSubscription =
-    currentSubscription && ['active', 'trialing'].includes(currentSubscription.status)
-
-  const handleKeepCurrentPlan = () => {
-    if (!currentSubscription || keepSubscriptionMutation.isPending) {
-      return
-    }
-    keepSubscriptionMutation.mutate(currentSubscription.subscriptionId)
-  }
 
   if (isLoading || isConfigLoading) {
     return (
@@ -463,39 +331,13 @@ export function Subscription() {
             )}
             <div className="flex flex-wrap gap-3">
               <Button
-                variant={isDowngradeScheduled ? 'default' : 'outline'}
-                onClick={isDowngradeScheduled ? handleKeepCurrentPlan : handleManageSubscription}
-                disabled={
-                  !canUpgrade ||
-                  !currentTier ||
-                  (isDowngradeScheduled && keepSubscriptionMutation.isPending)
-                }
+                variant="outline"
+                onClick={handlePortalRedirect}
+                disabled={isRedirecting}
               >
-                {isDowngradeScheduled
-                  ? keepSubscriptionMutation.isPending
-                    ? 'Keeping current plan…'
-                    : 'Keep current plan'
-                  : 'Manage Plan'}
+                {isRedirecting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ExternalLink className="h-4 w-4 mr-2" />}
+                Manage Subscription
               </Button>
-              {isDowngradeScheduled ? (
-                <Button
-                  variant="outline"
-                  onClick={handleManageSubscription}
-                  disabled={!canUpgrade || !currentTier}
-                >
-                  Edit downgrade
-                </Button>
-              ) : (
-                canCancelSubscription && (
-                  <Button
-                    variant="destructive"
-                    onClick={() => setIsCancelDialogOpen(true)}
-                    disabled={cancelSubscription.isPending}
-                  >
-                    Cancel Subscription
-                  </Button>
-                )
-              )}
             </div>
           </CardContent>
         </Card>
@@ -511,48 +353,33 @@ export function Subscription() {
         </Card>
       )}
 
+      <div className="flex justify-center">
+        <Tabs value={billingCycle} onValueChange={(v) => setBillingCycle(v as BillingCycle)} className="w-[400px]">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="monthly">Monthly</TabsTrigger>
+            <TabsTrigger value="annual">
+              Annual
+              <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                Save 20%
+              </span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
       <div className="grid gap-6 md:grid-cols-3">
         {tiers.map((tier) => {
           const isActive = tier.id === activeTier
-          const buttonDisabled = tier.id === 'free' ? false : !canUpgrade
-          const showChangePlanCopy =
-            tier.id === 'free' && currentSubscription && currentSubscription.plan !== 'free'
-          const pendingCycle = currentSubscription?.pendingBillingCycle ?? currentSubscription?.billingCycle
-          const tierSupportsPendingCycle = tier.billingCycles.some((cycle) => cycle.id === pendingCycle)
-          const isPendingTarget =
-            currentSubscription?.pendingPlan === tier.id && pendingCycle && tierSupportsPendingCycle
-          const handleTierButtonClick = () => {
-            if (tier.id === 'free') {
-              if (showChangePlanCopy) {
-                if (isDowngradeScheduled) {
-                  handleKeepCurrentPlan()
-                } else {
-                  handleManageSubscription()
-                }
-              }
-              return
-            }
-            handleSelectTier(tier)
-          }
-          const tierButtonLabel =
-            tier.id === 'free'
-              ? isActive
-                ? 'Current Plan'
-                : showChangePlanCopy
-                  ? isDowngradeScheduled
-                    ? 'Keep current plan'
-                    : 'Change Plan'
-                  : 'Start for Free'
-              : isActive
-                ? 'Manage Plan'
-                : isPendingTarget
-                  ? 'Change Scheduled'
-                  : currentSubscription
-                    ? 'Change Plan'
-                    : 'Upgrade'
+          const buttonDisabled = (tier.id === 'free' && activeTier === 'free') || !canUpgrade
           const isFreeTier = tier.id === 'free'
-          const tierPriceDisplay = isFreeTier ? 'Free' : tier.priceDisplay
-          const tierPriceSuffix = isFreeTier ? '' : '/month'
+
+          // Get price for selected cycle
+          const cycleData = tier.billingCycles?.find(c => c.id === billingCycle) || tier.billingCycles?.[0]
+
+          // Fallback to top-level props if no specific cycle data (backward compatibility)
+          const priceDisplay = cycleData ? cycleData.priceDisplay : tier.priceDisplay
+          const tierPriceDisplay = isFreeTier ? 'Free' : priceDisplay
+          const tierPriceSuffix = isFreeTier ? '' : billingCycle === 'annual' ? '/year' : '/month'
 
           return (
             <Card
@@ -596,17 +423,11 @@ export function Subscription() {
                   </div>
                 )}
 
-                {tier.id === 'free' && isDowngradeScheduled && currentSubscription?.currentPeriodEnd && (
-                  <div className="rounded-md border border-dashed border-muted-foreground/40 bg-muted/20 p-2 text-xs text-muted-foreground">
-                    Downgrade scheduled for {formatDate(currentSubscription?.currentPeriodEnd)}
-                  </div>
-                )}
-
                 <div className="flex-1">
                   <div className="text-sm font-medium mb-4 text-foreground/80">Includes:</div>
                   <ul className="space-y-3 text-sm">
                     {tier.features.map((feature) => (
-                      <li key={`${tier.id} -${feature} `} className="flex items-start gap-3">
+                      <li key={`${tier.id}-${feature}`} className="flex items-start gap-3">
                         <div className={cn(
                           "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full",
                           tier.id === 'pro' ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
@@ -626,15 +447,21 @@ export function Subscription() {
                       tier.id === 'pro' && "shadow-primary/25 hover:shadow-primary/40"
                     )}
                     variant={tier.id === 'free' ? 'outline' : 'default'}
-                    disabled={
-                      buttonDisabled ||
-                      (tier.id === 'free' && isDowngradeScheduled && keepSubscriptionMutation.isPending)
-                    }
-                    onClick={handleTierButtonClick}
+                    disabled={buttonDisabled || isRedirecting}
+                    onClick={() => handleSelectTier(tier)}
                   >
-                    {tier.id === 'free' && isDowngradeScheduled && keepSubscriptionMutation.isPending
-                      ? 'Keeping current plan…'
-                      : tierButtonLabel}
+                    {isRedirecting && isActive ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Processing...
+                      </>
+                    ) : isActive ? (
+                      'Current Plan'
+                    ) : tier.id === 'free' ? (
+                      'Downgrade'
+                    ) : (
+                      'Subscribe'
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -642,77 +469,6 @@ export function Subscription() {
           )
         })}
       </div>
-
-      <SubscriptionCheckoutDialog
-        open={isCheckoutOpen}
-        onOpenChange={(open) => {
-          setIsCheckoutOpen(open)
-          if (!open) {
-            setCheckoutTier(null)
-            setDialogMode('new')
-          }
-        }}
-        tier={checkoutTier}
-        billingCycle={billingCycle}
-        onBillingCycleChange={setBillingCycle}
-        publishableKey={subscriptionConfig?.publishableKey}
-        hasActiveSubscription={hasActiveSubscription}
-        mode={dialogMode}
-        onCompleted={() => {
-          setIsCheckoutOpen(false)
-          setCheckoutTier(null)
-          setDialogMode('new')
-        }}
-      />
-      <SubscriptionManageDialog
-        open={isManageDialogOpen}
-        onOpenChange={setIsManageDialogOpen}
-        subscription={currentSubscription ?? null}
-        publishableKey={subscriptionConfig?.publishableKey}
-        tier={currentTier}
-        onCancel={() => {
-          setIsManageDialogOpen(false)
-          setIsCancelDialogOpen(true)
-        }}
-        cancelDisabled={cancelSubscription.isPending}
-      />
-      <SubscriptionCancelDialog
-        open={isCancelDialogOpen}
-        onOpenChange={setIsCancelDialogOpen}
-        onConfirm={handleCancel}
-        isLoading={cancelSubscription.isPending}
-        planName={currentSubscription?.plan}
-        currentPeriodEnd={currentSubscription?.currentPeriodEnd}
-      />
-      {accountSelectionData && (
-        <AccountSelectionDialog
-          open={isAccountSelectionOpen}
-          onOpenChange={(open) => {
-            setIsAccountSelectionOpen(open)
-            if (!open) {
-              setAccountSelectionData(null)
-            }
-          }}
-          onConfirm={
-            // Use edit handler if subscription is already cancelled (edit mode)
-            // Otherwise use cancel handler (initial cancellation)
-            currentSubscription?.cancelAtPeriodEnd
-              ? handleEditAccountSelectionConfirm
-              : handleAccountSelectionConfirm
-          }
-          accounts={accountSelectionData.accounts}
-          freeLimit={accountSelectionData.freeLimit}
-          excessCount={accountSelectionData.excessCount}
-          initialSelection={accountSelectionData.initialSelection}
-          isEditing={currentSubscription?.cancelAtPeriodEnd && accountSelectionData.hasSelection}
-          isLoading={
-            currentSubscription?.cancelAtPeriodEnd
-              ? updateAccountSelection.isPending
-              : cancelSubscription.isPending
-          }
-        />
-      )}
     </div>
   )
 }
-

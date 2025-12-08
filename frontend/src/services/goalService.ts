@@ -36,6 +36,8 @@ interface RawGoalData {
   goalType?: string
   is_active?: boolean
   isActive?: boolean
+  is_completed?: boolean
+  isCompleted?: boolean
   progress_percentage?: number
   progress?: number
   progressPercentage?: number
@@ -61,6 +63,12 @@ const normalizeGoal = (goal: RawGoalData): Goal & { destination_account_id?: str
       : typeof goal.isActive === 'boolean'
       ? goal.isActive
       : false,
+  isCompleted:
+    typeof goal.is_completed === 'boolean'
+      ? goal.is_completed
+      : typeof goal.isCompleted === 'boolean'
+      ? goal.isCompleted
+      : false, // Default to false if not provided
   progress:
     typeof goal.progress_percentage === 'number'
       ? goal.progress_percentage
@@ -164,5 +172,87 @@ export const goalService = {
     }
     return response.data
   },
+
+  // Savings Rules API
+  async listSavingsRules(): Promise<ApiResponse<SavingsRule[]>> {
+    const response = await apiClient.get<ApiResponse<SavingsRule[]>>('/goals/savings-rules/')
+    return response.data
+  },
+
+  async getSavingsRule(id: string): Promise<ApiResponse<SavingsRule>> {
+    const response = await apiClient.get<ApiResponse<SavingsRule>>(`/goals/savings-rules/${id}/`)
+    return response.data
+  },
+
+  async createSavingsRule(data: CreateSavingsRulePayload): Promise<ApiResponse<SavingsRule>> {
+    const response = await apiClient.post<ApiResponse<SavingsRule>>('/goals/savings-rules/', data)
+    return response.data
+  },
+
+  async updateSavingsRule(id: string, data: Partial<CreateSavingsRulePayload>): Promise<ApiResponse<SavingsRule>> {
+    const response = await apiClient.patch<ApiResponse<SavingsRule>>(`/goals/savings-rules/${id}/`, data)
+    return response.data
+  },
+
+  async deleteSavingsRule(id: string): Promise<ApiResponse<null>> {
+    const response = await apiClient.delete<ApiResponse<null>>(`/goals/savings-rules/${id}/`)
+    return response.data
+  },
+
+  async toggleSavingsRuleActive(id: string): Promise<ApiResponse<SavingsRule>> {
+    const response = await apiClient.post<ApiResponse<SavingsRule>>(`/goals/savings-rules/${id}/toggle_active/`)
+    return response.data
+  },
+
+  async getSavingsRuleContributions(id: string): Promise<ApiResponse<SavingsContribution[]>> {
+    const response = await apiClient.get<ApiResponse<{ contributions: SavingsContribution[]; count: number; total_amount: number }>>(
+      `/goals/savings-rules/${id}/contributions/`
+    )
+    return response.data
+  },
+
+  async listSavingsContributions(): Promise<ApiResponse<SavingsContribution[]>> {
+    const response = await apiClient.get<ApiResponse<{ contributions: SavingsContribution[]; count: number; total_amount: number }>>(
+      '/goals/savings-contributions/'
+    )
+    return response.data
+  },
+}
+
+export interface SavingsRule {
+  rule_id: string
+  goal_id: string
+  goal_name: string
+  rule_type: 'roundup' | 'percentage'
+  trigger: 'all_expenses' | 'income' | 'category'
+  percentage?: number | string
+  category_id?: string
+  category_name?: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  total_contributions: number
+  total_amount: number
+}
+
+export interface CreateSavingsRulePayload {
+  goal: string
+  rule_type: 'roundup' | 'percentage'
+  trigger: 'all_expenses' | 'income' | 'category'
+  percentage?: number | string
+  category?: string | null
+  is_active?: boolean
+}
+
+export interface SavingsContribution {
+  contribution_id: string
+  rule_id: string
+  rule_type: string
+  goal_id: string
+  goal_name: string
+  transaction_id: string
+  merchant_name: string
+  amount: number | string
+  applied_at: string
 }
 

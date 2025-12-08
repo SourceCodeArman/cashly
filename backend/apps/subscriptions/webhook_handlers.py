@@ -16,6 +16,56 @@ logger = logging.getLogger(__name__)
 
 
 @transaction.atomic
+def handle_checkout_session_completed(event_data):
+    """
+    Handle checkout.session.completed webhook event.
+    Create subscription record immediately when checkout completes.
+    This ensures the subscription is saved before the user is redirected back.
+    """
+    try:
+        import stripe
+        session_data = event_data['data']['object']
+        session_id = session_data['id']
+        
+        logger.info(f"Processing checkout session {session_id}")
+        
+        # Get the subscription ID from the session
+        subscription_id = session_data.get('subscription')
+        if not subscription_id:
+            logger.warning(f"No subscription ID in checkout session {session_id}")
+            return
+        
+        # Check if subscription already exists to avoid duplicates
+        if Subscription.objects.filter(stripe_subscription_id=subscription_id).exists():
+            logger.info(f"Subscription {subscription_id} already exists from checkout session {session_id}")
+            return
+        
+        # Retrieve the full subscription object from Stripe
+        try:
+            stripe.api_key = getattr(__import__('django.conf', fromlist=['settings']).settings, 'STRIPE_SECRET_KEY', None)
+            subscription = stripe.Subscription.retrieve(subscription_id)
+        except stripe.StripeError as e:
+            logger.error(f"Failed to retrieve subscription {subscription_id} from Stripe: {e}")
+            return
+        
+        # Convert to the format expected by handle_subscription_created
+        subscription_event = {
+            'data': {
+                'object': subscription
+            }
+        }
+        
+        # Use existing subscription creation logic
+        handle_subscription_created(subscription_event)
+        
+        logger.info(f"Successfully processed checkout session {session_id}, created subscription {subscription_id}")
+        
+    except Exception as e:
+        logger.error(f"Error handling checkout.session.completed event: {e}", exc_info=True)
+        raise
+
+
+@transaction.atomic
 def handle_subscription_created(event_data):
     """
     Handle customer.subscription.created webhook event.
@@ -68,37 +118,37 @@ def handle_subscription_created(event_data):
                 break
         
         if not plan or not billing_cycle:
-            logger.error(f"Could not determine plan/billing_cycle for price ID {price_id}")
+            logger.error(
+                f"Could not determine plan/billing_cycle for price ID {price_id}. "
+                f"Configured IDs: {all_price_ids}"
+            )
             return
         
         # Create subscription record
+        current_period_start = subscription_data.get('current_period_start')
+        current_period_end = subscription_data.get('current_period_end')
+        trial_start = subscription_data.get('trial_start')
+        trial_end = subscription_data.get('trial_end')
+        
         subscription = Subscription.objects.create(
             user=user,
             stripe_subscription_id=subscription_id,
             stripe_customer_id=customer_id,
-            status=subscription_data['status'],
+            status=subscription_data.get('status'),
             plan=plan,
             billing_cycle=billing_cycle,
             price_id_monthly=price_id_monthly,
             price_id_annual=price_id_annual,
-            current_period_start=timezone.make_aware(
-                datetime.fromtimestamp(subscription_data['current_period_start'])
-            ),
-            current_period_end=timezone.make_aware(
-                datetime.fromtimestamp(subscription_data['current_period_end'])
-            ),
-            trial_start=timezone.make_aware(
-                datetime.fromtimestamp(subscription_data['trial_start'])
-            ) if subscription_data.get('trial_start') else None,
-            trial_end=timezone.make_aware(
-                datetime.fromtimestamp(subscription_data['trial_end'])
-            ) if subscription_data.get('trial_end') else None,
+            current_period_start=timezone.make_aware(datetime.fromtimestamp(current_period_start)) if current_period_start else timezone.now(),
+            current_period_end=timezone.make_aware(datetime.fromtimestamp(current_period_end)) if current_period_end else timezone.now(),
+            trial_start=timezone.make_aware(datetime.fromtimestamp(trial_start)) if trial_start else None,
+            trial_end=timezone.make_aware(datetime.fromtimestamp(trial_end)) if trial_end else None,
             cancel_at_period_end=subscription_data.get('cancel_at_period_end', False),
         )
         
         # Update user subscription tier
         user.subscription_tier = plan
-        user.subscription_status = subscription_data['status']
+        user.subscription_status = subscription_data.get('status')
         user.subscription_end_date = subscription.current_period_end
         user.save(update_fields=['subscription_tier', 'subscription_status', 'subscription_end_date'])
         
@@ -128,19 +178,20 @@ def handle_subscription_updated(event_data):
             return
         
         # Update subscription fields
-        subscription.status = subscription_data['status']
-        subscription.current_period_start = timezone.make_aware(
-            datetime.fromtimestamp(subscription_data['current_period_start'])
-        )
-        subscription.current_period_end = timezone.make_aware(
-            datetime.fromtimestamp(subscription_data['current_period_end'])
-        )
-        subscription.trial_start = timezone.make_aware(
-            datetime.fromtimestamp(subscription_data['trial_start'])
-        ) if subscription_data.get('trial_start') else None
-        subscription.trial_end = timezone.make_aware(
-            datetime.fromtimestamp(subscription_data['trial_end'])
-        ) if subscription_data.get('trial_end') else None
+        subscription.status = subscription_data.get('status')
+        
+        current_period_start = subscription_data.get('current_period_start')
+        current_period_end = subscription_data.get('current_period_end')
+        trial_start = subscription_data.get('trial_start')
+        trial_end = subscription_data.get('trial_end')
+        
+        if current_period_start:
+            subscription.current_period_start = timezone.make_aware(datetime.fromtimestamp(current_period_start))
+        if current_period_end:
+            subscription.current_period_end = timezone.make_aware(datetime.fromtimestamp(current_period_end))
+            
+        subscription.trial_start = timezone.make_aware(datetime.fromtimestamp(trial_start)) if trial_start else None
+        subscription.trial_end = timezone.make_aware(datetime.fromtimestamp(trial_end)) if trial_end else None
         
         # Track if cancel_at_period_end just became True (check before updating)
         was_cancelled = subscription.cancel_at_period_end
@@ -156,7 +207,7 @@ def handle_subscription_updated(event_data):
         
         # Update user
         user = subscription.user
-        user.subscription_status = subscription_data['status']
+        user.subscription_status = subscription_data.get('status')
         user.subscription_end_date = subscription.current_period_end
         
         # Update subscription tier based on subscription status and expiration
@@ -405,10 +456,19 @@ def handle_payment_succeeded(event_data):
             return
         
         # Get subscription
-        try:
-            subscription = Subscription.objects.get(stripe_subscription_id=subscription_id)
-        except Subscription.DoesNotExist:
-            logger.warning(f"Subscription {subscription_id} not found for payment_succeeded")
+        # Retry a few times in case handle_subscription_created is still running
+        subscription = None
+        for i in range(3):
+            try:
+                subscription = Subscription.objects.get(stripe_subscription_id=subscription_id)
+                break
+            except Subscription.DoesNotExist:
+                if i < 2:
+                    import time
+                    time.sleep(1)
+                    
+        if not subscription:
+            logger.warning(f"Subscription {subscription_id} not found for payment_succeeded after retries")
             return
         
         # Update subscription status

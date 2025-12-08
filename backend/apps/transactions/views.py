@@ -127,8 +127,16 @@ class TransactionViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         """Wrap list response to match ApiResponse contract."""
         response = super().list(request, *args, **kwargs)
-        # DRF pagination wraps results in {'results': [...]}, extract if present
-        data = response.data.get('results', response.data) if isinstance(response.data, dict) else response.data
+        # DRF pagination wraps results in {'results': [...]}.
+        # If it's a paginated response, return the whole object (count, next, previous, results)
+        # Otherwise, if it's a list or other dict, use it as is.
+        data = response.data
+        if isinstance(response.data, dict) and 'results' in response.data:
+            # It is already a paginated response, keep structure
+            pass
+        elif isinstance(response.data, dict):
+            # Try to get results if it's some other dict structure (fallback)
+            data = response.data.get('results', response.data)
         return Response({
             'status': 'success',
             'data': data,
@@ -391,6 +399,246 @@ class TransactionViewSet(viewsets.ModelViewSet):
             },
             'message': f'Retrieved suggestions for {sum(1 for v in results.values() if v is not None)} transactions'
         }, status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['post'], url_path='detect-recurring')
+    def detect_recurring(self, request):
+        """
+        POST /api/v1/transactions/detect-recurring
+        Run recurring transaction detection algorithm.
+        """
+        from .recurring_detection import detect_recurring_transactions
+        
+        min_occurrences = int(request.data.get('min_occurrences', 3))
+        lookback_days = int(request.data.get('lookback_days', 180))
+        
+        try:
+            detected_groups, updated_count = detect_recurring_transactions(
+                user=request.user,
+                min_occurrences=min_occurrences,
+                lookback_days=lookback_days
+            )
+            
+            return Response({
+                'status': 'success',
+                'data': {
+                    'detected': detected_groups,
+                    'updated_count': updated_count
+                },
+                'message': f'Detected {len(detected_groups)} recurring transaction groups, marked {updated_count} transactions'
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error detecting recurring transactions: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'Failed to detect recurring transactions'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['post'], url_path='mark-recurring')
+    def mark_recurring(self, request, pk=None):
+        """
+        POST /api/v1/transactions/:id/mark-recurring
+        Manually mark a transaction as recurring.
+        """
+        from .recurring_detection import mark_transaction_recurring
+        
+        transaction = self.get_object()
+        is_recurring = request.data.get('is_recurring', True)
+        
+        try:
+            mark_transaction_recurring(transaction, is_recurring)
+            
+            return Response({
+                'status': 'success',
+                'data': {
+                    'transaction_id': str(transaction.transaction_id),
+                    'is_recurring': transaction.is_recurring
+                },
+                'message': f'Transaction marked as {"recurring" if is_recurring else "non-recurring"}'
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error marking transaction as recurring: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'Failed to mark transaction'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'], url_path='mark-non-recurring')
+    def mark_non_recurring(self, request):
+        """
+        POST /api/v1/transactions/mark-non-recurring
+        Mark multiple transactions as non-recurring (bulk operation).
+        Body: { "transaction_ids": ["uuid1", "uuid2", ...] }
+        """
+        transaction_ids = request.data.get('transaction_ids', [])
+        
+        if not transaction_ids:
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'No transaction IDs provided'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Update only transactions belonging to the requesting user
+            updated_count = Transaction.objects.filter(
+                transaction_id__in=transaction_ids,
+                account__user=request.user
+            ).update(
+                is_recurring=False,
+                is_recurring_dismissed=True  # Permanently ignore these for future detection
+            )
+            
+            return Response({
+                'status': 'success',
+                'data': {
+                    'updated_count': updated_count,
+                    'transaction_ids': transaction_ids
+                },
+                'message': f'Marked {updated_count} transactions as non-recurring'
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error marking transactions as non-recurring: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'Failed to mark transactions as non-recurring'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['get'], url_path='similar-recurring')
+    def similar_recurring(self, request, pk=None):
+        """
+        GET /api/v1/transactions/:id/similar-recurring
+        Find similar transactions that might be part of the same recurring series.
+        """
+        from .recurring_detection import find_similar_recurring_transactions
+        
+        transaction = self.get_object()
+        
+        try:
+            similar = find_similar_recurring_transactions(transaction)
+            serializer = self.get_serializer(similar, many=True)
+            
+            return Response({
+                'status': 'success',
+                'data': serializer.data,
+                'message': f'Found {len(similar)} similar transactions'
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error finding similar recurring transactions: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'Failed to find similar transactions'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=False, methods=['post'], url_path='detect-transfers')
+    def detect_transfers(self, request):
+        """
+        POST /api/v1/transactions/detect-transfers
+        Run transfer detection algorithm.
+        """
+        from .transfer_detection import detect_transfers
+        
+        lookback_days = int(request.data.get('lookback_days', 30))
+        
+        try:
+            result = detect_transfers(
+                user=request.user,
+                lookback_days=lookback_days
+            )
+            
+            return Response({
+                'status': 'success',
+                'data': result,
+                'message': f'Detected {len(result["matched_pairs"])} transfer pairs, marked {result["updated_count"]} transactions'
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error detecting transfers: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'Failed to detect transfers'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['get'], url_path='potential-transfer-pairs')
+    def potential_transfer_pairs(self, request, pk=None):
+        """
+        GET /api/v1/transactions/:id/potential-transfer-pairs
+        Find potential matching transfers for a transaction.
+        """
+        from .transfer_detection import find_potential_transfer_pairs
+        
+        transaction = self.get_object()
+        
+        try:
+            potential_pairs = find_potential_transfer_pairs(transaction)
+            serializer = self.get_serializer(potential_pairs, many=True)
+            
+            return Response({
+                'status': 'success',
+                'data': serializer.data,
+                'message': f'Found {len(potential_pairs)} potential transfer pairs'
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error finding potential transfer pairs: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'Failed to find potential transfer pairs'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @action(detail=True, methods=['post'], url_path='mark-transfer-pair')
+    def mark_transfer_pair(self, request, pk=None):
+        """
+        POST /api/v1/transactions/:id/mark-transfer-pair
+        Manually mark two transactions as a transfer pair.
+        
+        Request body: { "other_transaction_id": "uuid" }
+        """
+        from .transfer_detection import mark_as_transfer_pair
+        
+        transaction1 = self.get_object()
+        other_id = request.data.get('other_transaction_id')
+        
+        if not other_id:
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'other_transaction_id is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            transaction2 = Transaction.objects.get(
+                transaction_id=other_id,
+                user=request.user
+            )
+            
+            mark_as_transfer_pair(transaction1, transaction2)
+            
+            return Response({
+                'status': 'success',
+                'data': {
+                    'transaction1_id': str(transaction1.transaction_id),
+                    'transaction2_id': str(transaction2.transaction_id)
+                },
+                'message': 'Transactions marked as transfer pair'
+            }, status=status.HTTP_200_OK)
+        except Transaction.DoesNotExist:
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'Other transaction not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error marking transfer pair: {e}", exc_info=True)
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'Failed to mark transfer pair'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class CategoryViewSet(viewsets.ModelViewSet):

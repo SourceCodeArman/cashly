@@ -1,15 +1,19 @@
 """
 Views for notifications app.
 """
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from django.utils import timezone
 
-from .models import Notification
-from .serializers import NotificationSerializer, NotificationCreateSerializer
+from .models import Notification, NotificationPreference
+from .serializers import (
+    NotificationSerializer, 
+    NotificationCreateSerializer,
+    NotificationPreferenceSerializer
+)
 from .permissions import IsNotificationOwner
 
 
@@ -131,3 +135,40 @@ class UnreadCountView(APIView):
             'message': 'Unread count retrieved successfully'
         })
 
+
+
+class NotificationPreferenceView(generics.RetrieveUpdateAPIView):
+    """
+    View to get or update notification preferences.
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = NotificationPreferenceSerializer
+    
+    def get_object(self):
+        """Get or create preferences for current user."""
+        obj, created = NotificationPreference.objects.get_or_create(user=self.request.user)
+        return obj
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Get preferences with standard API response format."""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response({
+            'status': 'success',
+            'data': serializer.data,
+            'message': 'Notification preferences retrieved successfully'
+        })
+    
+    def update(self, request, *args, **kwargs):
+        """Update preferences with standard API response format."""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        return Response({
+            'status': 'success',
+            'data': serializer.data,
+            'message': 'Notification preferences updated successfully'
+        })

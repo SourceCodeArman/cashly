@@ -1,7 +1,11 @@
-import { LayoutDashboard, Wallet, Receipt, Target, Tag, CreditCard, Bell, Settings, Shield, DollarSign } from 'lucide-react'
+import {
+  LayoutDashboard, Wallet,
+  Settings,
+  Calendar,
+  Tag, CreditCard, Bell, DollarSign, BookOpen, BarChart, Repeat, Lightbulb, Receipt, Target
+} from 'lucide-react'
 import { NavLink } from './NavLink'
 import { useAuth } from '@/hooks/useAuth'
-import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 import { cn } from '@/lib/utils'
 
@@ -38,8 +42,13 @@ export function AppSidebar() {
             <NavLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
             <NavLink to="/accounts" icon={Wallet} label="Accounts" />
             <NavLink to="/transactions" icon={Receipt} label="Transactions" />
+            <NavLink to="/recurring-transactions" icon={Repeat} label="Recurring" />
             <NavLink to="/goals" icon={Target} label="Goals" />
             <NavLink to="/budgets" icon={DollarSign} label="Budgets" />
+            <NavLink to="/bills" icon={Calendar} label="Bills" />
+            <NavLink to="/debts" icon={CreditCard} label="Debts" />
+            <NavLink to="/analytics" icon={BarChart} label="Analytics" />
+            <NavLink to="/insights" icon={Lightbulb} label="Insights" />
             <NavLink to="/categories" icon={Tag} label="Categories" />
           </div>
 
@@ -48,14 +57,9 @@ export function AppSidebar() {
             <NavLink to="/subscription" icon={CreditCard} label="Subscription" />
             <NavLink to="/notifications" icon={Bell} label="Notifications" />
             <NavLink to="/settings" icon={Settings} label="Settings" />
+            <NavLink to="/docs" icon={BookOpen} label="Documentation" />
           </div>
 
-          {/* Admin Group */}
-          {(user?.isSuperuser || useAuthStore.getState().isSuperuser) && (
-            <div className="space-y-1 pt-4 border-t border-sidebar-border">
-              <NavLink to="/admin" icon={Shield} label="Admin Dashboard" />
-            </div>
-          )}
         </nav>
       </div>
     </aside>

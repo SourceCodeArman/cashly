@@ -72,6 +72,12 @@ class UserLoginSerializer(TokenObtainPairSerializer):
             if not user.is_active:
                 raise serializers.ValidationError('User account is disabled.')
             
+            if user.mfa_enabled:
+                return {
+                    'mfa_required': True,
+                    'user': user
+                }
+            
             refresh = self.get_token(user)
             
             return {
@@ -92,7 +98,7 @@ class UserSerializer(serializers.ModelSerializer):
     """Serializer for user profile data."""
     firstName = serializers.CharField(source='first_name', read_only=True)
     lastName = serializers.CharField(source='last_name', read_only=True)
-    phoneNumber = serializers.CharField(source='phone_number', read_only=True)
+    phoneNumber = serializers.CharField(source='phone_number', required=False, allow_blank=True)
     subscriptionTier = serializers.CharField(source='subscription_tier', read_only=True)
     subscriptionStatus = serializers.CharField(source='subscription_status', read_only=True)
     subscriptionEndDate = serializers.DateTimeField(source='subscription_end_date', read_only=True)
@@ -141,6 +147,25 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             raise serializers.ValidationError({
                 'password': 'Password fields did not match.',
                 'password_confirm': 'Password fields did not match.'
+            })
+        return attrs
+
+class PasswordChangeSerializer(serializers.Serializer):
+    """Serializer for password change."""
+    old_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(
+        write_only=True,
+        required=True,
+        validators=[validate_password]
+    )
+    new_password_confirm = serializers.CharField(write_only=True, required=True)
+    
+    def validate(self, attrs):
+        """Validate password confirmation."""
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError({
+                'new_password': 'Password fields did not match.',
+                'new_password_confirm': 'Password fields did not match.'
             })
         return attrs
 
@@ -342,4 +367,36 @@ class TransferCreateSerializer(serializers.Serializer):
         # (checking transfer_authorized, active authorization, etc.)
         
         return data
+
+
+class EmailChangeRequestSerializer(serializers.Serializer):
+    new_email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+class EmailChangeVerifySerializer(serializers.Serializer):
+    token = serializers.CharField()
+
+
+class MFASetupSerializer(serializers.Serializer):
+    """Serializer for MFA setup verification."""
+    code = serializers.CharField(required=True, min_length=6, max_length=6)
+    secret = serializers.CharField(required=True)
+
+
+class MFALoginVerifySerializer(serializers.Serializer):
+    """Serializer for MFA login verification."""
+    code = serializers.CharField(required=True, min_length=6, max_length=6)
+    token = serializers.CharField(required=True)
+
+
+class MFABackupCodeVerifySerializer(serializers.Serializer):
+    """Serializer for MFA backup code verification during login."""
+    code = serializers.CharField(
+        required=True,
+        min_length=8,
+        max_length=9,  # 8 chars or 9 with hyphen (XXXX-XXXX)
+        help_text="Backup code in format XXXX-XXXX or XXXXXXXX"
+    )
+    token = serializers.CharField(required=True)
+
 

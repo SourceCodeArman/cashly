@@ -5,10 +5,10 @@ from django.conf import settings
 
 
 # Stripe Price IDs - Set via environment variables after creating products in Stripe
-PREMIUM_MONTHLY_PRICE_ID = getattr(settings, 'STRIPE_PREMIUM_MONTHLY_PRICE_ID', '')
-PREMIUM_ANNUAL_PRICE_ID = getattr(settings, 'STRIPE_PREMIUM_ANNUAL_PRICE_ID', '')
-PRO_MONTHLY_PRICE_ID = getattr(settings, 'STRIPE_PRO_MONTHLY_PRICE_ID', '')
-PRO_ANNUAL_PRICE_ID = getattr(settings, 'STRIPE_PRO_ANNUAL_PRICE_ID', '')
+PREMIUM_MONTHLY_PRICE_ID = getattr(settings, 'STRIPE_PREMIUM_MONTHLY_PRICE_ID', 'price_1SU4th9FH3KQIIeT32lJfeW2')
+PREMIUM_ANNUAL_PRICE_ID = getattr(settings, 'STRIPE_PREMIUM_ANNUAL_PRICE_ID', 'price_1SU4th9FH3KQIIeT32lJfeW2_annual')
+PRO_MONTHLY_PRICE_ID = getattr(settings, 'STRIPE_PRO_MONTHLY_PRICE_ID', 'price_1SU4sS9FH3KQIIeTUG3QLP7T')
+PRO_ANNUAL_PRICE_ID = getattr(settings, 'STRIPE_PRO_ANNUAL_PRICE_ID', 'price_1SU4sS9FH3KQIIeTUG3QLP7T_annual')
 ENTERPRISE_MONTHLY_PRICE_ID = getattr(settings, 'STRIPE_ENTERPRISE_MONTHLY_PRICE_ID', '')
 ENTERPRISE_ANNUAL_PRICE_ID = getattr(settings, 'STRIPE_ENTERPRISE_ANNUAL_PRICE_ID', '')
 

@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/authStore'
 import { AppSidebar } from '@/components/AppSidebar'
 import { Header } from '@/components/Header'
 import { useUIStore } from '@/store/uiStore'
+import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications'
 
 interface ProtectedLayoutProps {
   children: React.ReactNode
@@ -11,14 +12,20 @@ interface ProtectedLayoutProps {
 
 export function ProtectedLayout({ children }: ProtectedLayoutProps) {
   const navigate = useNavigate()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
   const { sidebarOpen } = useUIStore()
+
+  // Initialize real-time notifications
+  useRealtimeNotifications()
 
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login', { replace: true })
+    } else if (user && (user.isSuperuser || user.isAdmin)) {
+      // Redirect admin users to admin dashboard
+      navigate('/admin', { replace: true })
     }
-  }, [isAuthenticated, navigate])
+  }, [isAuthenticated, user, navigate])
 
   if (!isAuthenticated) {
     return null
@@ -39,4 +46,3 @@ export function ProtectedLayout({ children }: ProtectedLayoutProps) {
     </div>
   )
 }
-

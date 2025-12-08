@@ -26,11 +26,11 @@ export function useRequireAdmin() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (!isAuthenticated || !user?.isSuperuser) {
-      navigate('/dashboard', { replace: true })
+    if (!isAuthenticated || !(user?.isSuperuser || user?.isAdmin)) {
+      navigate('/login', { replace: true })
     }
   }, [isAuthenticated, user, navigate])
 
-  return { isAuthenticated: isAuthenticated && user?.isSuperuser, isAdmin: user?.isSuperuser }
+  return { isAuthenticated: isAuthenticated && (user?.isSuperuser || user?.isAdmin), isAdmin: user?.isSuperuser || user?.isAdmin }
 }
 

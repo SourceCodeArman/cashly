@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 PLAID_ENVIRONMENTS = {
     "SANDBOX": Environment.Sandbox,
-    "DEVELOPMENT": Environment.Development,
     "PRODUCTION": Environment.Production,
 }
 

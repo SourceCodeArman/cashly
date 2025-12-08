@@ -144,3 +144,92 @@ class SendGridConfigurationTestCase(TestCase):
                 f'{setting_name} should be configured'
             )
 
+
+from rest_framework.test import APITestCase
+from rest_framework import status
+from django.urls import reverse
+from apps.accounts.models import EmailChangeRequest
+from datetime import timedelta
+from django.utils import timezone
+
+class EmailChangeTestCase(APITestCase):
+    """Test email change flow."""
+    
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='user@example.com',
+            username='user',
+            password='password123'
+        )
+        self.client.force_authenticate(user=self.user)
+        self.request_url = reverse('accounts:email-change-request')
+        self.verify_url = reverse('accounts:email-change-verify')
+        
+    def test_request_email_change_success(self):
+        """Test requesting email change successfully."""
+        data = {
+            'new_email': 'new@example.com',
+            'password': 'password123'
+        }
+        response = self.client.post(self.request_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(EmailChangeRequest.objects.filter(user=self.user, new_email='new@example.com').exists())
+        
+    def test_request_email_change_invalid_password(self):
+        """Test requesting email change with invalid password."""
+        data = {
+            'new_email': 'new@example.com',
+            'password': 'wrongpassword'
+        }
+        response = self.client.post(self.request_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(EmailChangeRequest.objects.filter(user=self.user).exists())
+        
+    def test_request_email_change_existing_email(self):
+        """Test requesting email change to an existing email."""
+        User.objects.create_user(email='existing@example.com', username='existing', password='password')
+        data = {
+            'new_email': 'existing@example.com',
+            'password': 'password123'
+        }
+        response = self.client.post(self.request_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
+    def test_verify_email_change_success(self):
+        """Test verifying email change successfully."""
+        # Create request
+        request = EmailChangeRequest.objects.create(
+            user=self.user,
+            new_email='verified@example.com',
+            token='valid-token',
+            expires_at=timezone.now() + timedelta(hours=1)
+        )
+        
+        data = {'token': 'valid-token'}
+        response = self.client.post(self.verify_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'verified@example.com')
+        self.assertFalse(EmailChangeRequest.objects.filter(pk=request.pk).exists())
+        
+    def test_verify_email_change_invalid_token(self):
+        """Test verifying email change with invalid token."""
+        data = {'token': 'invalid-token'}
+        response = self.client.post(self.verify_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
+    def test_verify_email_change_expired_token(self):
+        """Test verifying email change with expired token."""
+        request = EmailChangeRequest.objects.create(
+            user=self.user,
+            new_email='expired@example.com',
+            token='expired-token',
+            expires_at=timezone.now() - timedelta(hours=1)
+        )
+        
+        data = {'token': 'expired-token'}
+        response = self.client.post(self.verify_url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(EmailChangeRequest.objects.filter(pk=request.pk).exists())
+

@@ -1,30 +1,18 @@
-import { useState } from 'react'
-import { Save, Loader2, Sun, Moon, Monitor } from 'lucide-react'
+import { useEffect } from 'react'
+import { Sun, Moon, Monitor, CreditCard } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/hooks/useAuth'
-import { authService } from '@/services/authService'
-import { useAuthStore } from '@/store/authStore'
-import { useQueryClient } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/queryClient'
-import { toast } from 'sonner'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { useTheme } from '@/components/ThemeProvider'
-
-
-const profileSchema = z.object({
-  firstName: z.string().min(1, 'First name is required'),
-  lastName: z.string().min(1, 'Last name is required'),
-  email: z.string().email('Invalid email address'),
-})
-
-type ProfileForm = z.infer<typeof profileSchema>
+import { NotificationPreferencesForm } from '@/components/settings/NotificationPreferencesForm'
+import { AccountList } from '@/components/settings/AccountList'
+import { ProfileForm } from '@/components/settings/ProfileForm'
+import { SecuritySettings } from '@/components/settings/SecuritySettings'
+import { useSearchParams, useNavigate } from 'react-router-dom'
+import { authService } from '@/services/authService'
+import { toast } from 'sonner'
 
 function ThemeSelector() {
   const { theme, setTheme } = useTheme()
@@ -51,43 +39,35 @@ function ThemeSelector() {
     </div>
   )
 }
+
 export function Settings() {
   const { user } = useAuth()
-  const { setUser } = useAuthStore()
-  const queryClient = useQueryClient()
-  const [isLoading, setIsLoading] = useState(false)
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<ProfileForm>({
-    resolver: zodResolver(profileSchema),
-    defaultValues: {
-      firstName: user?.firstName || '',
-      lastName: user?.lastName || '',
-      email: user?.email || '',
-    },
-  })
-
-  const onSubmit = async (data: ProfileForm) => {
-    setIsLoading(true)
-    try {
-      const response = await authService.updateProfile(data)
-      if (response.status === 'success' && response.data) {
-        setUser(response.data)
-        queryClient.invalidateQueries({ queryKey: queryKeys.profile })
-        toast.success('Profile updated successfully')
-      } else {
-        toast.error(response.message || 'Failed to update profile')
+  useEffect(() => {
+    const verifyEmail = async () => {
+      const token = searchParams.get('verify_email')
+      if (token) {
+        try {
+          const response = await authService.verifyEmailChange(token)
+          if (response.status === 'success') {
+            toast.success('Email updated successfully')
+            // Remove query param
+            navigate('/settings', { replace: true })
+            // Refresh page to update user context (or we could use setUser from store)
+            window.location.reload()
+          } else {
+            toast.error(response.message || 'Failed to verify email change')
+          }
+        } catch (error: any) {
+          toast.error(error.message || 'Failed to verify email change')
+        }
       }
-    } catch (error) {
-      toast.error('An error occurred. Please try again.')
-      console.error('Update profile error:', error)
-    } finally {
-      setIsLoading(false)
     }
-  }
+
+    verifyEmail()
+  }, [searchParams, navigate])
 
   if (!user) {
     return (
@@ -119,6 +99,7 @@ export function Settings() {
       <Tabs defaultValue="profile" className="space-y-6">
         <TabsList>
           <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="accounts">Accounts</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
         </TabsList>
@@ -131,57 +112,20 @@ export function Settings() {
               <CardDescription>Update your personal information</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
-                    <Input
-                      id="firstName"
-                      {...register('firstName')}
-                      disabled={isLoading}
-                    />
-                    {errors.firstName && (
-                      <p className="text-sm text-destructive">{errors.firstName.message}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input
-                      id="lastName"
-                      {...register('lastName')}
-                      disabled={isLoading}
-                    />
-                    {errors.lastName && (
-                      <p className="text-sm text-destructive">{errors.lastName.message}</p>
-                    )}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    {...register('email')}
-                    disabled={isLoading}
-                  />
-                  {errors.email && (
-                    <p className="text-sm text-destructive">{errors.email.message}</p>
-                  )}
-                </div>
-                <Button type="submit" disabled={isLoading} className="bg-gradient-primary">
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Save Changes
-                    </>
-                  )}
-                </Button>
-              </form>
+              <ProfileForm />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Accounts Tab */}
+        <TabsContent value="accounts" className="space-y-6">
+          <Card className="border-border shadow-soft">
+            <CardHeader>
+              <CardTitle>Connected Accounts</CardTitle>
+              <CardDescription>Manage your linked bank accounts</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AccountList />
             </CardContent>
           </Card>
         </TabsContent>
@@ -193,29 +137,8 @@ export function Settings() {
               <CardTitle>Security</CardTitle>
               <CardDescription>Manage your account security settings</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-lg border border-border p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">Change Password</div>
-                    <div className="text-sm text-muted-foreground">
-                      Update your password to keep your account secure
-                    </div>
-                  </div>
-                  <Button variant="outline">Change Password</Button>
-                </div>
-              </div>
-              <div className="rounded-lg border border-border p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium">Two-Factor Authentication</div>
-                    <div className="text-sm text-muted-foreground">
-                      Add an extra layer of security to your account
-                    </div>
-                  </div>
-                  <Button variant="outline">Enable 2FA</Button>
-                </div>
-              </div>
+            <CardContent>
+              <SecuritySettings />
             </CardContent>
           </Card>
         </TabsContent>
@@ -227,27 +150,31 @@ export function Settings() {
               <CardTitle>Preferences</CardTitle>
               <CardDescription>Customize your experience</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-lg border border-border p-4">
-                <div className="space-y-4">
-                  <div>
-                    <div className="font-medium">Theme</div>
-                    <div className="text-sm text-muted-foreground">
-                      Choose your preferred color scheme
-                    </div>
-                  </div>
+            <CardContent className="space-y-8">
+              <div className="space-y-4">
+                <div>
+                  <div className="font-medium mb-4">Theme</div>
                   <ThemeSelector />
                 </div>
               </div>
+
+              <div className="space-y-4">
+                <div className="font-medium">Notifications</div>
+                <NotificationPreferencesForm />
+              </div>
+
               <div className="rounded-lg border border-border p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="font-medium">Notifications</div>
+                    <div className="font-medium">Subscription</div>
                     <div className="text-sm text-muted-foreground">
-                      Manage your notification preferences
+                      Manage your subscription plan and billing
                     </div>
                   </div>
-                  <Button variant="outline">Manage</Button>
+                  <Button variant="outline" onClick={() => window.location.href = '/subscription'}>
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Manage Subscription
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -257,4 +184,3 @@ export function Settings() {
     </div>
   )
 }
-

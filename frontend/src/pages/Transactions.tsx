@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Search, Filter, X, ChevronRight, Calendar, ChevronDown } from 'lucide-react'
+import { Search, Filter, X, ChevronRight, Calendar, ChevronDown, Repeat, ArrowLeftRight, ChevronLeft, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -14,10 +14,27 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
+import { SkeletonList } from '@/components/common/SkeletonList'
+import { EmptyState } from '@/components/common/EmptyState'
+
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { RecurringGroupCard } from "@/components/RecurringGroupCard"
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { useTransactions, useTransactionStats, useCategorizeTransaction } from '@/hooks/useTransactions'
 import { useCategories } from '@/hooks/useCategories'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { transactionService, type DetectRecurringResponse } from '@/services/transactionService'
+import { toast } from 'sonner'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { Receipt } from 'lucide-react'
 
 export function Transactions() {
   const [search, setSearch] = useState('')
@@ -27,17 +44,102 @@ export function Transactions() {
   const [startDate, setStartDate] = useState<string>('')
   const [endDate, setEndDate] = useState<string>('')
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  const [showRecurring, setShowRecurring] = useState<boolean>(false)
+  const [showTransfers, setShowTransfers] = useState<boolean>(false)
+  const [page, setPage] = useState<number>(1)
+  const [pageSize] = useState<number>(20)
 
   const { data: transactionsData, isLoading } = useTransactions({
     search: search || undefined,
     category: categoryFilter !== 'all' ? categoryFilter : undefined,
     start_date: startDate || undefined,
     end_date: endDate || undefined,
-    page_size: 100, // Fetch up to 100 transactions to show all
+    page,
+    page_size: pageSize,
+    is_recurring: showRecurring ? true : undefined,
+    is_transfer: showTransfers ? true : undefined,
   })
   const { data: stats, isLoading: statsLoading } = useTransactionStats()
   const { data: categories } = useCategories(true) // Only fetch parent categories
   const categorizeTransaction = useCategorizeTransaction()
+
+  const queryClient = useQueryClient()
+  const [runningRecurringDetection, setRunningRecurringDetection] = useState(false)
+  const [runningTransferDetection, setRunningTransferDetection] = useState(false)
+  const [detectionResult, setDetectionResult] = useState<DetectRecurringResponse | null>(null)
+  const [showDetectionDialog, setShowDetectionDialog] = useState(false)
+
+  const detectRecurringMutation = useMutation({
+    mutationFn: () => transactionService.detectRecurring(3, 180),
+    onSuccess: (data) => {
+      if (data.data) {
+        setDetectionResult(data.data)
+        setShowDetectionDialog(true)
+        toast.success(
+          `Detected ${data.data.detected.length} recurring groups, marked ${data.data.updated_count} transactions`
+        )
+      }
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to detect recurring transactions')
+    },
+  })
+
+  const detectTransfersMutation = useMutation({
+    mutationFn: () => transactionService.detectTransfers(30),
+    onSuccess: (data) => {
+      toast.success(
+        `Detected ${data.data.matched_pairs.length} transfer pairs, marked ${data.data.updated_count} transactions`
+      )
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to detect transfers')
+    },
+  })
+
+  const markNonRecurringMutation = useMutation({
+    mutationFn: (transactionIds: string[]) => transactionService.markNonRecurring(transactionIds),
+    onSuccess: (data, transactionIds) => {
+      toast.success(data.message || `Marked ${data.data?.updated_count} transactions as non-recurring`)
+      queryClient.invalidateQueries({ queryKey: ['transactions'] })
+      // Close the expanded detail and refresh detection results
+      // Optionally re-run detection to update the list
+      if (detectionResult) {
+        // Filter out the group that was just marked
+        const updatedDetected = detectionResult.detected.filter(
+          g => !g.transaction_ids.some(id => transactionIds.includes(id))
+        )
+        setDetectionResult({
+          ...detectionResult,
+          detected: updatedDetected,
+          updated_count: detectionResult.updated_count - (data.data?.updated_count || 0)
+        })
+      }
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to mark as non-recurring')
+    },
+  })
+
+  const runRecurringDetection = async () => {
+    setRunningRecurringDetection(true)
+    try {
+      await detectRecurringMutation.mutateAsync()
+    } finally {
+      setRunningRecurringDetection(false)
+    }
+  }
+
+  const runTransferDetection = async () => {
+    setRunningTransferDetection(true)
+    try {
+      await detectTransfersMutation.mutateAsync()
+    } finally {
+      setRunningTransferDetection(false)
+    }
+  }
 
   // Date filter presets
   const applyDateFilter = (preset: string) => {
@@ -87,22 +189,37 @@ export function Transactions() {
   }
 
   // Handle different response structures: results (paginated) or json (direct array) or direct array
-  const transactions = useMemo(() => {
-    if (!transactionsData) return []
+  const { transactions, totalCount } = useMemo(() => {
+    if (!transactionsData) return { transactions: [], totalCount: 0 }
+
     // Handle paginated response with 'results'
     if ('results' in transactionsData && Array.isArray(transactionsData.results)) {
-      return transactionsData.results
+      return {
+        transactions: transactionsData.results,
+        totalCount: transactionsData.count || transactionsData.results.length
+      }
     }
-    // Handle response with 'json' field
+
+    // Handle response with 'json' field (legacy/fallback)
     if ('json' in transactionsData && Array.isArray(transactionsData.json)) {
-      return transactionsData.json
+      return {
+        transactions: transactionsData.json,
+        totalCount: transactionsData.json.length
+      }
     }
+
     // Handle direct array response
     if (Array.isArray(transactionsData)) {
-      return transactionsData
+      return {
+        transactions: transactionsData,
+        totalCount: transactionsData.length
+      }
     }
-    return []
+
+    return { transactions: [], totalCount: 0 }
   }, [transactionsData])
+
+  const totalPages = Math.ceil(totalCount / pageSize)
 
   // Group categories by type (API already returns only parent categories)
   const categorizedCategories = useMemo(() => {
@@ -166,20 +283,56 @@ export function Transactions() {
     setEndDate('')
   }
 
-  const hasActiveFilters = categoryFilter !== 'all' || dateFilter !== 'all' || search !== ''
+  const hasActiveFilters = categoryFilter !== 'all' || dateFilter !== 'all' || search !== '' || showRecurring || showTransfers
+
+  // Count recurring and transfer filters are now handled server-side, 
+  // so we can't count them from 'allTransactions' because we only have the current page.
+  // We can just rely on the active state of buttons.
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" >
       {/* Page Header */}
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
-        <p className="text-muted-foreground">
-          View and manage your transaction history
-        </p>
-      </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
+            <p className="text-muted-foreground">
+              View and manage your transaction history
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={runRecurringDetection}
+              disabled={runningRecurringDetection}
+            >
+              {runningRecurringDetection ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Repeat className="h-4 w-4 mr-2" />
+              )}
+              Detect Recurring
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={runTransferDetection}
+              disabled={runningTransferDetection}
+            >
+              {runningTransferDetection ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ArrowLeftRight className="h-4 w-4 mr-2" />
+              )}
+              Detect Transfers
+            </Button>
+          </div>
+        </div>
+      </div >
 
       {/* Stats Cards */}
-      <div className="grid gap-6 md:grid-cols-3">
+      < div className="grid gap-6 md:grid-cols-3" >
         <Card className="border-border shadow-soft">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Spending</CardTitle>
@@ -222,10 +375,10 @@ export function Transactions() {
             )}
           </CardContent>
         </Card>
-      </div>
+      </div >
 
       {/* Filters */}
-      <Card className="border-border shadow-soft">
+      < Card className="border-border shadow-soft" >
         <Collapsible defaultOpen={true}>
           <CollapsibleTrigger className="flex w-full items-center justify-between p-6">
             <div className="flex items-center gap-2">
@@ -351,6 +504,45 @@ export function Transactions() {
                       className="text-xs h-9"
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Recurring & Transfer Filters */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Special Filters</span>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant={showRecurring ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setShowRecurring(!showRecurring)}
+                    className="text-xs gap-1.5"
+                  >
+                    <Repeat className="h-3 w-3" />
+                    Recurring
+                    {showRecurring && (
+                      <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                        Active
+                      </Badge>
+                    )}
+                  </Button>
+
+                  <Button
+                    variant={showTransfers ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setShowTransfers(!showTransfers)}
+                    className="text-xs gap-1.5"
+                  >
+                    <ArrowLeftRight className="h-3 w-3" />
+                    Transfers
+                    {showTransfers && (
+                      <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                        Active
+                      </Badge>
+                    )}
+                  </Button>
                 </div>
               </div>
 
@@ -559,11 +751,11 @@ export function Transactions() {
             </div>
           </CollapsibleContent>
         </Collapsible>
-      </Card>
+      </Card >
 
 
       {/* Transactions Table */}
-      <Card className="border-border shadow-soft">
+      < Card className="border-border shadow-soft" >
         <CardHeader>
           <CardTitle>Transaction History</CardTitle>
           <CardDescription>
@@ -572,15 +764,15 @@ export function Transactions() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="space-y-4">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
+            <SkeletonList items={5} />
           ) : transactions.length === 0 ? (
-            <div className="flex h-48 items-center justify-center text-muted-foreground">
-              No transactions found
-            </div>
+            <EmptyState
+              icon={Receipt}
+              title="No transactions yet"
+              description="Connect a bank account to start automatically tracking your transactions, or add them manually."
+              actionLabel="Connect Account"
+              onAction={() => window.location.href = '/accounts'}
+            />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {transactions.map((transaction) => {
@@ -593,7 +785,7 @@ export function Transactions() {
                     className="flex items-center justify-between rounded-lg border border-border p-4 transition-colors hover:bg-muted/50"
                   >
                     <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <div className="font-semibold">{transaction.merchantName || 'Transaction'}</div>
                         {transaction.category && (
                           <Badge
@@ -603,6 +795,18 @@ export function Transactions() {
                             }}
                           >
                             {transaction.category.name}
+                          </Badge>
+                        )}
+                        {transaction.isRecurring && (
+                          <Badge variant="outline" className="gap-1 text-[10px] h-5 px-1.5">
+                            <Repeat className="h-2.5 w-2.5" />
+                            Recurring
+                          </Badge>
+                        )}
+                        {transaction.isTransfer && (
+                          <Badge variant="outline" className="gap-1 text-[10px] h-5 px-1.5">
+                            <ArrowLeftRight className="h-2.5 w-2.5" />
+                            Transfer
                           </Badge>
                         )}
                         {!transaction.category && categories && (
@@ -650,8 +854,93 @@ export function Transactions() {
               })}
             </div>
           )}
+
+          {/* Pagination Controls */}
+          {totalCount > 0 && (
+            <div className="flex items-center justify-between border-t mt-4 pt-4">
+              <div className="text-sm text-muted-foreground">
+                Showing {Math.min((page - 1) * pageSize + 1, totalCount)} to {Math.min(page * pageSize, totalCount)} of {totalCount} results
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1 || isLoading}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Previous
+                </Button>
+                <div className="text-sm font-medium min-w-[3rem] text-center">
+                  Page {page} of {totalPages || 1}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages || isLoading}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
-      </Card>
+      </Card >
+
+      <Dialog open={showDetectionDialog} onOpenChange={setShowDetectionDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Detected Recurring Transactions</DialogTitle>
+            <DialogDescription>
+              We found {detectionResult?.detected.length} recurring patterns in your transaction history.
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="max-h-[60vh] mt-4">
+            <div className="space-y-4">
+              {detectionResult?.detected.map((group) => (
+                <RecurringGroupCard
+                  key={group.merchant}
+                  merchantName={group.merchant}
+                  amount={group.amount}
+                  count={group.occurrences}
+                  periodType={group.period_type}
+                  intervalDays={group.interval_days}
+                  accountName={group.account_name}
+                  confidence={{
+                    score: group.confidence_score,
+                    level: group.confidence_level
+                  }}
+                  dates={{
+                    first: group.first_date,
+                    last: group.last_date
+                  }}
+                  onMarkNonRecurring={() => {
+                    if (confirm(`Are you sure you want to mark these ${group.occurrences} transactions as non-recurring?`)) {
+                      markNonRecurringMutation.mutate(group.transaction_ids)
+                    }
+                  }}
+                  isProcessing={markNonRecurringMutation.isPending}
+                />
+              ))}
+            </div>
+
+            {detectionResult?.detected.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                No recurring patterns found with sufficient confidence.
+              </div>
+            )}
+          </ScrollArea>
+
+          <div className="flex justify-end mt-4">
+            <Button onClick={() => setShowDetectionDialog(false)}>
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

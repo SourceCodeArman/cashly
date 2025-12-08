@@ -10,6 +10,9 @@ export type WidgetType =
     | 'activeGoals'
     | 'recentTransactions'
     | 'budgetProgress'
+    | 'sankeyDiagram'
+    | 'netWorth'
+    | 'recommendations'
 
 export interface WidgetConfig {
     id: WidgetType
@@ -83,6 +86,27 @@ const DEFAULT_WIDGETS: WidgetConfig[] = [
         isVisible: false, // Hidden by default
         order: 6,
         colSpan: { mobile: 1, tablet: 1, desktop: 1 }
+    },
+    {
+        id: 'sankeyDiagram',
+        label: 'Cash Flow',
+        isVisible: false, // Hidden by default
+        order: 7,
+        colSpan: { mobile: 1, tablet: 2, desktop: 2 }
+    },
+    {
+        id: 'netWorth',
+        label: 'Net Worth',
+        isVisible: false, // Hidden by default
+        order: 8,
+        colSpan: { mobile: 1, tablet: 1, desktop: 1 }
+    },
+    {
+        id: 'recommendations',
+        label: 'Recommendations',
+        isVisible: false, // Hidden by default
+        order: 9,
+        colSpan: { mobile: 1, tablet: 2, desktop: 2 }
     }
 ]
 
@@ -94,7 +118,10 @@ const DEFAULT_CUSTOM_LAYOUT: Layout[] = [
     { i: 'spendingTrend', x: 0, y: 2, w: 8, h: 6 },
     { i: 'activeGoals', x: 8, y: 2, w: 4, h: 6 },
     { i: 'recentTransactions', x: 0, y: 8, w: 12, h: 6 },
-    { i: 'budgetProgress', x: 0, y: 14, w: 4, h: 6 }
+    { i: 'budgetProgress', x: 0, y: 14, w: 4, h: 6 },
+    { i: 'sankeyDiagram', x: 4, y: 14, w: 8, h: 6 },
+    { i: 'netWorth', x: 0, y: 20, w: 4, h: 4 },
+    { i: 'recommendations', x: 4, y: 20, w: 8, h: 6 }
 ]
 
 // Preset Layouts

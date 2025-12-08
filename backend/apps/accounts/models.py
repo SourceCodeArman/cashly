@@ -41,6 +41,16 @@ class User(AbstractUser):
     )
     mfa_enabled = models.BooleanField(default=False)
     mfa_secret = models.CharField(max_length=255, blank=True, null=True)
+    mfa_backup_codes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of hashed backup codes for MFA recovery"
+    )
+    mfa_backup_codes_generated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When backup codes were last generated"
+    )
     tour_done = models.BooleanField(default=False, help_text="Whether the user has completed the welcome tour")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -218,3 +228,27 @@ class PlaidWebhookEvent(models.Model):
 
     def __str__(self):
         return f"{self.webhook_type}:{self.webhook_code} ({self.item_id})"
+
+
+class EmailChangeRequest(models.Model):
+    """
+    Model to store pending email change requests.
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_change_requests')
+    new_email = models.EmailField()
+    token = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    
+    class Meta:
+        db_table = 'email_change_requests'
+        indexes = [
+            models.Index(fields=['token']),
+            models.Index(fields=['user', 'created_at']),
+        ]
+    
+    def __str__(self):
+        return f"Email change for {self.user.username} to {self.new_email}"
+    
+    def is_expired(self):
+        return timezone.now() > self.expires_at

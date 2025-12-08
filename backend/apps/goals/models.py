@@ -4,7 +4,7 @@ Savings Goal models for Cashly.
 import uuid
 from django.db import models
 from django.contrib.auth import get_user_model
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from decimal import Decimal
 from django.db.models import Sum, Q
@@ -150,6 +150,16 @@ class Goal(models.Model):
     
     def complete(self):
         """Mark goal as completed."""
+        # Defensive check: Only complete if current_amount >= target_amount
+        if self.target_amount > 0 and self.current_amount < self.target_amount:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Attempted to complete goal {self.goal_id} but current_amount ({self.current_amount}) < target_amount ({self.target_amount}). "
+                f"Not completing."
+            )
+            return
+        
         if not self.is_completed:
             self.is_completed = True
             self.completed_at = timezone.now()
@@ -180,17 +190,32 @@ class Goal(models.Model):
             self.current_amount = total
             needs_update = True
         
+        # Defensive check: If goal is marked completed but shouldn't be, uncomplete it first
+        if self.is_completed and self.target_amount > 0 and self.current_amount < self.target_amount:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Goal {self.goal_id} was incorrectly marked as completed. "
+                f"Uncompleting: current_amount={self.current_amount}, target_amount={self.target_amount}"
+            )
+            self.is_completed = False
+            self.completed_at = None
+            needs_update = True
+        
         # Check if goal should be automatically completed
         # This happens when current_amount >= target_amount and goal is not already completed
         # This check runs regardless of whether current_amount changed (e.g., if target_amount was reduced)
-        if self.current_amount >= self.target_amount and not self.is_completed:
+        # Only complete if target_amount is valid (> 0) to prevent false completion
+        if (self.target_amount > 0 and 
+            self.current_amount >= self.target_amount and 
+            not self.is_completed):
             # Complete the goal (this will save the goal with is_completed=True and current_amount)
             self.complete()
             return self.current_amount
         
         # If we updated current_amount but didn't complete, save the update
         if needs_update:
-            self.save(update_fields=['current_amount', 'updated_at'])
+            self.save(update_fields=['current_amount', 'is_completed', 'completed_at', 'updated_at'])
         
         return self.current_amount
     
@@ -367,3 +392,7 @@ class TransferAuthorization(models.Model):
     
     def __str__(self):
         return f"Authorization for {self.goal.name} - {self.status}"
+
+
+# Import automated savings models
+from .savings_models import SavingsRule, SavingsContribution

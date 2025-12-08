@@ -17,12 +17,14 @@ import { Input } from '@/components/ui/input'
 import { CurrencyInput } from '@/components/ui/currency-input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Skeleton } from '@/components/ui/skeleton'
+import { SkeletonCard } from '@/components/common/SkeletonCard'
+import { EmptyState } from '@/components/common/EmptyState'
 import { useGoals, useCreateGoal, useContributeToGoal } from '@/hooks/useGoals'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { SavingsRulesManager } from '@/components/goals/SavingsRulesManager'
 
 const createGoalSchema = z.object({
   name: z.string().min(1, 'Goal name is required'),
@@ -107,8 +109,11 @@ export function Goals() {
     setContributionDialogOpen(true)
   }
 
-  const activeGoals = goals?.filter((goal) => goal.isActive) || []
-  const completedGoals = goals?.filter((goal) => !goal.isActive) || []
+  // Show all non-completed goals as active (isActive is for whether goal can receive contributions)
+  // Completed goals are shown separately
+  // Use explicit boolean check to handle undefined values
+  const activeGoals = goals?.filter((goal) => goal.isCompleted !== true) || []
+  const completedGoals = goals?.filter((goal) => goal.isCompleted === true) || []
 
   return (
     <div className="space-y-6">
@@ -189,27 +194,17 @@ export function Goals() {
         <h2 className="text-2xl font-semibold">Active Goals</h2>
         {isLoading ? (
           <div className="grid gap-6 md:grid-cols-2">
-            {[1, 2].map((i) => (
-              <Card key={i}>
-                <CardHeader>
-                  <Skeleton className="h-5 w-32" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-16 w-full" />
-                </CardContent>
-              </Card>
-            ))}
+            <SkeletonCard />
+            <SkeletonCard />
           </div>
         ) : activeGoals.length === 0 ? (
-          <Card className="border-dashed border-2">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <TargetIcon className="mb-4 h-12 w-12 text-muted-foreground" />
-              <h3 className="mb-2 text-lg font-semibold">No active goals</h3>
-              <p className="mb-4 text-center text-sm text-muted-foreground">
-                Create a new goal to start tracking your savings
-              </p>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={TargetIcon}
+            title="No active goals yet"
+            description="Create your first savings goal to start tracking your progress toward financial milestones."
+            actionLabel="Create Goal"
+            onAction={() => setDialogOpen(true)}
+          />
         ) : (
           <div className="grid gap-6 md:grid-cols-2">
             {activeGoals.map((goal) => {
@@ -265,6 +260,9 @@ export function Goals() {
           </div>
         )}
       </div>
+
+      {/* Automated Savings Rules */}
+      <SavingsRulesManager />
 
       {/* Completed Goals */}
       {completedGoals.length > 0 && (

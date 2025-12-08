@@ -8,13 +8,15 @@ interface AuthLayoutProps {
 
 export function AuthLayout({ children }: AuthLayoutProps) {
   const navigate = useNavigate()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/dashboard', { replace: true })
+    if (isAuthenticated && user) {
+      // Check if user is admin/superuser and redirect accordingly
+      const isAdmin = user.isSuperuser || user.isAdmin
+      navigate(isAdmin ? '/admin' : '/dashboard', { replace: true })
     }
-  }, [isAuthenticated, navigate])
+  }, [isAuthenticated, user, navigate])
 
   if (isAuthenticated) {
     return null

@@ -18,6 +18,7 @@ APPEND_SLASH = config('APPEND_SLASH', default=False, cast=bool)
 
 # Application definition
 INSTALLED_APPS = [
+    'daphne', # daphne must be listed before django.contrib.staticfiles
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -30,6 +31,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'drf_yasg',
+    'storages',
+    'channels',
     
     # Local apps
     'apps.accounts',
@@ -40,6 +43,10 @@ INSTALLED_APPS = [
     'apps.api',
     'apps.notifications',
     'apps.subscriptions',
+    'apps.insights',
+    'apps.bills',
+    'apps.debts',
+    'apps.marketing',
 ]
 
 MIDDLEWARE = [
@@ -55,6 +62,17 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'config.urls'
+ASGI_APPLICATION = 'config.asgi.application'
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [(config('REDIS_HOST', default='localhost'), 6379)],
+        },
+    },
+}
+
 
 TEMPLATES = [
     {
@@ -75,72 +93,19 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
-# Support both connection string (Supabase) and individual parameters
-DATABASE_URL = config('DB_URL', default=None) or config('DATABASE_URL', default=None)
+# Prioritize individual parameters over connection string
+# This allows for more flexible configuration, especially for Supabase
+DB_USER = config('DB_USER', default=None)
+DB_PASSWORD = config('DB_PASSWORD', default=None)
+DB_HOST = config('DB_HOST', default=None)
+DB_PORT = config('DB_PORT', default=None)
+DB_NAME = config('DB_NAME', default=None)
 
-if DATABASE_URL:
-    try:
-        # Parse connection string (Supabase format: postgresql://user:password@host:port/dbname)
-        # dj_database_url automatically handles SSL for Supabase
-        db_config = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
-        
-        # Determine if this is a Supabase connection (hostname contains .supabase.co)
-        db_host = db_config.get('HOST', '')
-        is_supabase = '.supabase.co' in db_host or 'pooler.supabase.com' in db_host
-        
-        # Configure SSL mode based on host
-        if 'OPTIONS' not in db_config:
-            db_config['OPTIONS'] = {}
-        
-        if db_host in ('localhost', '127.0.0.1', 'db'):
-            # For local PostgreSQL, prefer SSL but don't require it
-            db_config['OPTIONS']['sslmode'] = 'prefer'
-        elif is_supabase:
-            # Supabase requires SSL
-            db_config['OPTIONS']['sslmode'] = 'require'
-            # Ensure SSL context is properly configured
-            db_config['OPTIONS']['sslcert'] = None
-            db_config['OPTIONS']['sslkey'] = None
-            db_config['OPTIONS']['sslrootcert'] = None
-        else:
-            # For other remote hosts, require SSL
-            db_config['OPTIONS']['sslmode'] = 'require'
-        
-        DATABASES = {
-            'default': db_config
-        }
-    except Exception as e:
-        # If URL parsing fails, fall back to individual parameters
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f'Failed to parse DATABASE_URL: {e}. Falling back to individual parameters.')
-        DATABASE_URL = None
-        # If connection fails due to DNS issues, provide helpful error message
-        if 'nodename' in str(e).lower() or 'servname' in str(e).lower():
-            import sys
-            print("\n" + "="*70, file=sys.stderr)
-            print("⚠️  DATABASE CONNECTION ERROR", file=sys.stderr)
-            print("="*70, file=sys.stderr)
-            print("The Supabase hostname cannot be resolved.", file=sys.stderr)
-            print("\nThis usually means:", file=sys.stderr)
-            print("  1. Your Supabase project is PAUSED (most common)", file=sys.stderr)
-            print("  2. The hostname is incorrect", file=sys.stderr)
-            print("  3. DNS/IPv6 routing issues", file=sys.stderr)
-            print("\n🔧 Next steps:", file=sys.stderr)
-            print("  1. Go to: https://supabase.com/dashboard/project/yeohuydyvpfhhaukltqz", file=sys.stderr)
-            print("  2. Check if project is paused - if so, click 'Restore Project'", file=sys.stderr)
-            print("  3. Wait 2-5 minutes for project to resume", file=sys.stderr)
-            print("  4. Get the connection string from Project Settings → Database", file=sys.stderr)
-            print("  5. Try using the connection pooler (port 6543) instead", file=sys.stderr)
-            print("\n📖 See: backend/FIX_SUPABASE_CONNECTION.md for detailed instructions", file=sys.stderr)
-            print("="*70 + "\n", file=sys.stderr)
-
-if not DATABASE_URL:
-    # Fallback to individual parameters
-    db_host = config('DB_HOST', default='localhost')
+# If individual parameters are provided, use them
+if DB_USER and DB_PASSWORD and DB_HOST and DB_NAME:
     # Determine SSL mode based on host
     # Supabase and remote hosts require SSL, localhost doesn't
-    if db_host in ('localhost', '127.0.0.1', 'db'):
+    if DB_HOST in ('localhost', '127.0.0.1', 'db'):
         default_sslmode = 'prefer'  # Prefer SSL but don't require for local dev
     else:
         default_sslmode = 'require'  # Require SSL for remote hosts (Supabase)
@@ -148,16 +113,98 @@ if not DATABASE_URL:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': config('DB_NAME', default='postgres'),
-            'USER': config('DB_USER', default='postgres'),
-            'PASSWORD': config('DB_PASSWORD', default=''),
-            'HOST': db_host,
-            'PORT': config('DB_PORT', default='5432'),
+            'NAME': DB_NAME,
+            'USER': DB_USER,
+            'PASSWORD': DB_PASSWORD,
+            'HOST': DB_HOST,
+            'PORT': DB_PORT or '5432',
             'OPTIONS': {
                 'sslmode': config('DB_SSLMODE', default=default_sslmode),
             },
+            'CONN_MAX_AGE': 600,  # Connection pooling
         }
     }
+else:
+    # Fallback to connection string format
+    DATABASE_URL = config('DB_URL', default=None) or config('DATABASE_URL', default=None)
+    
+    if DATABASE_URL:
+        try:
+            # Parse connection string (Supabase format: postgresql://user:password@host:port/dbname)
+            # dj_database_url automatically handles SSL for Supabase
+            db_config = dj_database_url.parse(DATABASE_URL, conn_max_age=600)
+
+            # Determine if this is a Supabase connection (hostname contains .supabase.co)
+            db_host = db_config.get('HOST', '')
+            is_supabase = '.supabase.co' in db_host or 'pooler.supabase.com' in db_host
+
+            # Configure SSL mode based on host
+            if 'OPTIONS' not in db_config:
+                db_config['OPTIONS'] = {}
+
+            if db_host in ('localhost', '127.0.0.1', 'db'):
+                # For local PostgreSQL, prefer SSL but don't require it
+                db_config['OPTIONS']['sslmode'] = 'prefer'
+            elif is_supabase:
+                # Supabase requires SSL
+                db_config['OPTIONS']['sslmode'] = 'require'
+                # Ensure SSL context is properly configured
+                db_config['OPTIONS']['sslcert'] = None
+                db_config['OPTIONS']['sslkey'] = None
+                db_config['OPTIONS']['sslrootcert'] = None
+            else:
+                # For other remote hosts, require SSL
+                db_config['OPTIONS']['sslmode'] = 'require'
+
+                DATABASES = {
+                    'default': db_config
+                }
+        except Exception as e:
+            # If URL parsing fails, provide helpful error message
+            import logging
+            import sys
+            logger = logging.getLogger(__name__)
+            logger.error(f'Failed to parse DATABASE_URL: {e}')
+            # If connection fails due to DNS issues, provide helpful error message
+            if 'nodename' in str(e).lower() or 'servname' in str(e).lower():
+                print("\n" + "="*70, file=sys.stderr)
+                print("⚠️  DATABASE CONNECTION ERROR", file=sys.stderr)
+                print("="*70, file=sys.stderr)
+                print("The Supabase hostname cannot be resolved.", file=sys.stderr)
+                print("\nThis usually means:", file=sys.stderr)
+                print("  1. Your Supabase project is PAUSED (most common)", file=sys.stderr)
+                print("  2. The hostname is incorrect", file=sys.stderr)
+                print("  3. DNS/IPv6 routing issues", file=sys.stderr)
+                print("\n🔧 Next steps:", file=sys.stderr)
+                print("  1. Go to your Supabase dashboard", file=sys.stderr)
+                print("  2. Check if project is paused - if so, click 'Restore Project'", file=sys.stderr)
+                print("  3. Wait 2-5 minutes for project to resume", file=sys.stderr)
+                print("  4. Use individual DB_* environment variables instead", file=sys.stderr)
+                print("="*70 + "\n", file=sys.stderr)
+            # Fallback to default local database
+            DATABASES = {
+                'default': {
+                    'ENGINE': 'django.db.backends.postgresql',
+                    'NAME': 'postgres',
+                    'USER': 'postgres',
+                    'PASSWORD': '',
+                    'HOST': 'localhost',
+                    'PORT': '5432',
+                }
+            }
+    else:
+        # No DATABASE_URL and no individual parameters provided
+        # Use default local database configuration
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': 'postgres',
+                'USER': 'postgres',
+                'PASSWORD': '',
+                'HOST': 'localhost',
+                'PORT': '5432',
+            }
+        }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -206,6 +253,8 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PARSER_CLASSES': [
         'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.MultiPartParser',
+        'rest_framework.parsers.FormParser',
     ],
     'EXCEPTION_HANDLER': 'apps.api.exceptions.custom_exception_handler',
     'DEFAULT_THROTTLE_CLASSES': [
@@ -402,6 +451,29 @@ LOGGING = {
     },
 }
 
+
 # Create logs directory if it doesn't exist
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)
+
+
+# Email Configuration
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.sendgrid.net')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='apikey')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@cashly.app')
+
+# Cloudflare R2 Storage Configuration
+R2_ACCOUNT_ID = config('R2_ACCOUNT_ID', default='')
+R2_ACCESS_KEY_ID = config('R2_ACCESS_KEY_ID', default='')
+R2_SECRET_ACCESS_KEY = config('R2_SECRET_ACCESS_KEY', default='')
+R2_BUCKET_NAME = config('R2_BUCKET_NAME', default='cashly')
+R2_ENDPOINT = config('R2_ENDPOINT', default='')
+
+# File Upload Settings
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10MB
+ALLOWED_RECEIPT_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf']
 

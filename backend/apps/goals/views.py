@@ -14,12 +14,16 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q
 
 from .models import Goal, Contribution
+from .savings_models import SavingsRule, SavingsContribution
 from .serializers import (
     GoalSerializer,
     GoalCreateSerializer,
     GoalContributeSerializer,
     ContributionSerializer,
     ContributionCreateSerializer,
+    SavingsRuleSerializer,
+    SavingsRuleCreateSerializer,
+    SavingsContributionSerializer,
 )
 from .utils import calculate_goal_forecast, calculate_monthly_contribution
 from .services import sync_destination_account_balance
@@ -324,6 +328,27 @@ class GoalViewSet(viewsets.ModelViewSet):
         
         # Use GoalSerializer for response to include all computed fields
         goal = serializer.instance
+        
+        # CRITICAL: Refresh from database to ensure we have the latest state
+        # This prevents returning stale data that might show incorrect completion status
+        goal.refresh_from_db()
+        
+        # Final verification before returning response
+        if goal.is_completed and goal.target_amount > 0 and goal.current_amount < goal.target_amount:
+            logger.error(
+                f"CRITICAL: Goal {goal.goal_id} is marked completed but current_amount ({goal.current_amount}) < target_amount ({goal.target_amount}). "
+                f"Force uncompleting before returning response."
+            )
+            goal.is_completed = False
+            goal.completed_at = None
+            goal.save(update_fields=['is_completed', 'completed_at', 'updated_at'])
+            goal.refresh_from_db()
+        
+        logger.info(
+            f"Returning goal response: {goal.goal_id}, current_amount={goal.current_amount}, "
+            f"target_amount={goal.target_amount}, is_completed={goal.is_completed}"
+        )
+        
         response_serializer = GoalSerializer(goal, context={'request': request})
         
         return Response({
@@ -334,26 +359,76 @@ class GoalViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """Set user automatically on create and sync destination account balance if provided."""
-        goal = serializer.save(user=self.request.user, current_amount=Decimal('0.00'), is_completed=False)
+        # Set defaults: new goals are active by default unless explicitly set to False
+        defaults = {
+            'user': self.request.user,
+            'current_amount': Decimal('0.00'),
+            'is_completed': False,
+        }
+        # Only set is_active=True if it wasn't explicitly provided in the request
+        if 'is_active' not in serializer.validated_data:
+            defaults['is_active'] = True
+        
+        goal = serializer.save(**defaults)
+        
+        # Log initial state for debugging
+        logger.info(
+            f"Goal created: {goal.goal_id}, current_amount={goal.current_amount}, "
+            f"target_amount={goal.target_amount}, is_completed={goal.is_completed}, "
+            f"has_destination_account={goal.destination_account is not None}"
+        )
         
         # If destination account is provided, sync its balance
         if goal.destination_account:
             try:
                 # Sync destination account balance
+                # Note: sync_destination_account_balance will check and complete the goal if needed
                 balance = sync_destination_account_balance(goal)
-                goal.current_amount = balance
-                goal.initial_balance_synced = True
-                goal.save(update_fields=['current_amount', 'initial_balance_synced'])
+                # Refresh goal from DB to get updated is_completed status
+                goal.refresh_from_db()
+                logger.info(
+                    f"After balance sync: goal {goal.goal_id}, current_amount={goal.current_amount}, "
+                    f"target_amount={goal.target_amount}, is_completed={goal.is_completed}"
+                )
             except Exception as e:
                 # Log error but don't fail goal creation
-                import logging
-                logger = logging.getLogger(__name__)
                 logger.error(f"Failed to sync destination account balance for goal {goal.goal_id}: {e}")
                 # Goal will start with 0.00, user can sync manually later
         
-        # Check if goal is already completed (target reached)
-        if goal.current_amount >= goal.target_amount:
+        # Refresh goal from DB to ensure we have latest values
+        goal.refresh_from_db()
+        
+        # Defensive check: Ensure goal is not completed if current_amount < target_amount
+        # This prevents false completion
+        if goal.is_completed:
+            if goal.target_amount > 0 and goal.current_amount < goal.target_amount:
+                logger.warning(
+                    f"Goal {goal.goal_id} was incorrectly marked as completed. "
+                    f"current_amount={goal.current_amount}, target_amount={goal.target_amount}. "
+                    f"Uncompleting goal."
+                )
+                goal.is_completed = False
+                goal.completed_at = None
+                goal.save(update_fields=['is_completed', 'completed_at', 'updated_at'])
+        
+        # Only check completion if goal is not already completed and has valid target
+        # This prevents false completion when target_amount is 0 or very small
+        if not goal.is_completed and goal.target_amount > 0 and goal.current_amount >= goal.target_amount:
+            logger.info(
+                f"Completing goal {goal.goal_id}: current_amount={goal.current_amount} >= target_amount={goal.target_amount}"
+            )
             goal.complete()
+        
+        # Final verification
+        goal.refresh_from_db()
+        if goal.is_completed and goal.target_amount > 0 and goal.current_amount < goal.target_amount:
+            logger.error(
+                f"CRITICAL: Goal {goal.goal_id} is marked completed but current_amount ({goal.current_amount}) < target_amount ({goal.target_amount}). "
+                f"Force uncompleting."
+            )
+            goal.is_completed = False
+            goal.completed_at = None
+            goal.save(update_fields=['is_completed', 'completed_at', 'updated_at'])
     
     def update(self, request, *args, **kwargs):
         """Update goal and return full GoalSerializer response."""
@@ -944,3 +1019,110 @@ class GoalViewSet(viewsets.ModelViewSet):
                 'data': None,
                 'message': 'An unexpected error occurred while syncing balance'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SavingsRuleViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing savings rules.
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = SavingsRuleSerializer
+    
+    def get_queryset(self):
+        """Return savings rules for the current user."""
+        return SavingsRule.objects.filter(user=self.request.user).order_by('-created_at')
+    
+    def get_serializer_class(self):
+        """Return appropriate serializer based on action."""
+        if self.action == 'create':
+            return SavingsRuleCreateSerializer
+        return SavingsRuleSerializer
+    
+    def create(self, request, *args, **kwargs):
+        """Create savings rule and return response."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        
+        # Use SavingsRuleSerializer for response
+        rule = serializer.instance
+        response_serializer = SavingsRuleSerializer(rule, context={'request': request})
+        
+        return Response({
+            'status': 'success',
+            'data': response_serializer.data,
+            'message': 'Savings rule created successfully'
+        }, status=status.HTTP_201_CREATED)
+    
+    def update(self, request, *args, **kwargs):
+        """Update savings rule and return response."""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        # Use SavingsRuleSerializer for response
+        rule = serializer.instance
+        response_serializer = SavingsRuleSerializer(rule, context={'request': request})
+        
+        return Response({
+            'status': 'success',
+            'data': response_serializer.data,
+            'message': 'Savings rule updated successfully'
+        })
+    
+    @action(detail=True, methods=['post'])
+    def toggle_active(self, request, pk=None):
+        """Toggle savings rule active status."""
+        rule = self.get_object()
+        rule.is_active = not rule.is_active
+        rule.save(update_fields=['is_active', 'updated_at'])
+        
+        serializer = SavingsRuleSerializer(rule, context={'request': request})
+        return Response({
+            'status': 'success',
+            'data': serializer.data,
+            'message': f'Savings rule {"activated" if rule.is_active else "deactivated"} successfully'
+        })
+    
+    @action(detail=True, methods=['get'])
+    def contributions(self, request, pk=None):
+        """Get contributions for a savings rule."""
+        rule = self.get_object()
+        contributions = SavingsContribution.objects.filter(rule=rule).order_by('-applied_at')
+        
+        serializer = SavingsContributionSerializer(contributions, many=True, context={'request': request})
+        return Response({
+            'status': 'success',
+            'data': {
+                'contributions': serializer.data,
+                'count': contributions.count(),
+                'total_amount': float(sum(c.amount for c in contributions))
+            },
+            'message': 'Contributions retrieved successfully'
+        })
+
+
+class SavingsContributionListView(APIView):
+    """
+    List all savings contributions for the current user.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """Get all savings contributions for the user."""
+        contributions = SavingsContribution.objects.filter(
+            rule__user=request.user
+        ).order_by('-applied_at')
+        
+        serializer = SavingsContributionSerializer(contributions, many=True, context={'request': request})
+        return Response({
+            'status': 'success',
+            'data': {
+                'contributions': serializer.data,
+                'count': contributions.count(),
+                'total_amount': float(sum(c.amount for c in contributions))
+            },
+            'message': 'Savings contributions retrieved successfully'
+        })

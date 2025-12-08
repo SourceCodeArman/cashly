@@ -13,6 +13,9 @@ export function useNotifications() {
       }
       throw new Error(response.message || 'Failed to fetch notifications')
     },
+    // Decrease polling interval or remove it since we have WebSockets now
+    // Keeping a fallback of 60s just in case
+    refetchInterval: 60000, 
   })
 }
 
@@ -26,6 +29,7 @@ export function useUnreadCount() {
       }
       throw new Error(response.message || 'Failed to fetch unread count')
     },
+    refetchInterval: 60000, // Fallback polling
   })
 }
 
@@ -75,4 +79,3 @@ export function useDeleteNotification() {
     },
   })
 }
-

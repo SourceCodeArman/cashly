@@ -9,7 +9,9 @@ from typing import Optional, Tuple
 import logging
 
 from .models import Goal, Contribution
+from .savings_models import SavingsRule, SavingsContribution
 from apps.transactions.models import Transaction
+from apps.accounts.models import Account
 from apps.accounts.plaid_service import PlaidService
 from apps.accounts.plaid_utils import PlaidIntegrationError
 
@@ -103,11 +105,34 @@ def sync_destination_account_balance(goal: Goal) -> Decimal:
                 goal.current_amount = balance
                 goal.initial_balance_synced = True
                 
+                # Log before completion check
+                logger.info(
+                    f"Syncing balance for goal {goal.goal_id}: balance={balance}, "
+                    f"current_amount={goal.current_amount}, target_amount={goal.target_amount}, "
+                    f"is_completed={goal.is_completed}"
+                )
+                
                 # Check if goal should be auto-completed (only if not already completed)
-                if goal.current_amount >= goal.target_amount and not goal.is_completed:
+                # Only complete if target_amount is valid (> 0) and current_amount >= target_amount
+                if (goal.target_amount > 0 and 
+                    goal.current_amount >= goal.target_amount and 
+                    not goal.is_completed):
+                    logger.info(
+                        f"Auto-completing goal {goal.goal_id}: {goal.current_amount} >= {goal.target_amount}"
+                    )
                     goal.complete()
                 else:
-                    goal.save(update_fields=['current_amount', 'initial_balance_synced'])
+                    # Defensive check: If goal is marked completed but shouldn't be, uncomplete it
+                    if goal.is_completed and (goal.target_amount <= 0 or goal.current_amount < goal.target_amount):
+                        logger.warning(
+                            f"Goal {goal.goal_id} was incorrectly marked as completed. "
+                            f"Uncompleting: current_amount={goal.current_amount}, target_amount={goal.target_amount}"
+                        )
+                        goal.is_completed = False
+                        goal.completed_at = None
+                        goal.save(update_fields=['current_amount', 'initial_balance_synced', 'is_completed', 'completed_at'])
+                    else:
+                        goal.save(update_fields=['current_amount', 'initial_balance_synced'])
                 
                 logger.info(f"Synced balance {balance} for goal {goal.goal_id} from account {plaid_account_id}")
                 return balance
@@ -171,7 +196,6 @@ def process_contribution_rules(goal: Goal, date_range: Optional[Tuple] = None) -
             continue
         
         try:
-            from apps.accounts.models import Account
             source_account = Account.objects.get(account_id=account_id, user=goal.user)
             
             # Calculate contribution amount based on rule type
@@ -466,5 +490,215 @@ def get_goal_contribution_history(goal: Goal, date_range: Optional[Tuple] = None
         'automatic_total': float(automatic_total),
         'total': float(goal.current_amount),
         'count': contributions.count(),
+    }
+
+
+def process_savings_rules_for_transaction(transaction: Transaction) -> list:
+    """
+    Process a transaction against all active savings rules and create contributions.
+    
+    Args:
+        transaction: Transaction instance to process
+        
+    Returns:
+        list: List of SavingsContribution instances created
+    """
+    if not transaction.user:
+        return []
+    
+    # Get all active savings rules for the user
+    rules = SavingsRule.objects.filter(
+        user=transaction.user,
+        is_active=True
+    ).select_related('goal', 'category')
+    
+    contributions = []
+    
+    for rule in rules:
+        # Check if transaction matches rule trigger conditions
+        if not _transaction_matches_rule(transaction, rule):
+            continue
+        
+        # Check if contribution already exists for this transaction and rule
+        existing_contribution = SavingsContribution.objects.filter(
+            rule=rule,
+            transaction=transaction
+        ).first()
+        
+        if existing_contribution:
+            # Skip if already processed
+            continue
+        
+        # Calculate contribution amount
+        contribution_amount = rule.calculate_contribution(transaction)
+        
+        if contribution_amount <= 0:
+            continue
+        
+        # Ensure goal is active
+        if not rule.goal.is_active or rule.goal.is_completed:
+            logger.warning(
+                f"Skipping savings rule {rule.rule_id} - goal {rule.goal.goal_id} is not active or completed"
+            )
+            continue
+        
+        try:
+            # Execute actual transfer if goal has destination account and transfers are authorized
+            transfer_executed = False
+            if rule.goal.destination_account and rule.goal.transfer_authorized and rule.goal.can_execute_transfers():
+                try:
+                    from apps.accounts.transfer_service import execute_transfer
+                    
+                    # For round-up savings: transfer from the transaction's account
+                    # For percentage-based on income: transfer from the transaction's account
+                    source_account = transaction.account
+                    
+                    # Verify source account is valid and active
+                    if source_account and source_account.is_active:
+                        transfer_result = execute_transfer(
+                            goal_id=str(rule.goal.goal_id),
+                            source_account_id=str(source_account.account_id),
+                            destination_account_id=str(rule.goal.destination_account.account_id),
+                            amount=contribution_amount,
+                            user=transaction.user,
+                            description=f"Auto: {rule.get_rule_type_display()[:6]}"  # Max 10 chars
+                        )
+                        
+                        transfer_executed = True
+                        logger.info(
+                            f"Transfer executed successfully: {transfer_result.get('transfer_id')} "
+                            f"for savings rule {rule.rule_id} from transaction {transaction.transaction_id}"
+                        )
+                    else:
+                        logger.warning(
+                            f"Cannot execute transfer for rule {rule.rule_id} - "
+                            f"source account {source_account.account_id if source_account else 'None'} is not active"
+                        )
+                        
+                except Exception as e:
+                    # Log error but continue to create contribution record
+                    # The contribution record tracks the intent even if transfer fails
+                    logger.error(
+                        f"Failed to execute transfer for savings rule {rule.rule_id} "
+                        f"from transaction {transaction.transaction_id}: {e}",
+                        exc_info=True
+                    )
+                    # Continue to create contribution record (tracks intent)
+                    # For cash goals or when transfer fails, we still track the contribution
+            
+            # Create savings contribution record
+            savings_contribution = SavingsContribution.objects.create(
+                rule=rule,
+                transaction=transaction,
+                goal=rule.goal,
+                amount=contribution_amount
+            )
+            
+            # Create or update goal contribution
+            goal_contribution, created = Contribution.objects.get_or_create(
+                goal=rule.goal,
+                transaction=transaction,
+                source='automatic',
+                defaults={
+                    'user': transaction.user,
+                    'amount': contribution_amount,
+                    'date': transaction.date,
+                    'note': f'Automated savings: {rule.get_rule_type_display()} ({rule.get_trigger_display()})'
+                }
+            )
+            
+            if not created:
+                # Update existing contribution if amount changed
+                if goal_contribution.amount != contribution_amount:
+                    goal_contribution.amount = contribution_amount
+                    goal_contribution.date = transaction.date
+                    goal_contribution.save(update_fields=['amount', 'date'])
+            
+            contributions.append(savings_contribution)
+            
+            action = "Transferred and tracked" if transfer_executed else "Tracked"
+            logger.info(
+                f"{action} savings contribution: ${contribution_amount} for rule {rule.rule_id} "
+                f"from transaction {transaction.transaction_id}"
+            )
+            
+        except Exception as e:
+            logger.error(
+                f"Error creating savings contribution for rule {rule.rule_id} "
+                f"and transaction {transaction.transaction_id}: {e}",
+                exc_info=True
+            )
+            continue
+    
+    return contributions
+
+
+def _transaction_matches_rule(transaction: Transaction, rule: SavingsRule) -> bool:
+    """
+    Check if a transaction matches a savings rule's trigger conditions.
+    
+    Args:
+        transaction: Transaction instance
+        rule: SavingsRule instance
+        
+    Returns:
+        bool: True if transaction matches rule conditions
+    """
+    trigger = rule.trigger
+    
+    if trigger == 'all_expenses':
+        # Match all expense transactions (negative amounts)
+        return transaction.amount < 0
+    
+    elif trigger == 'income':
+        # Match only income transactions (positive amounts)
+        return transaction.amount > 0
+    
+    elif trigger == 'category':
+        # Match transactions in specific category
+        if not rule.category:
+            return False
+        return transaction.category == rule.category
+    
+    return False
+
+
+def process_pending_savings_for_user(user, lookback_days: int = 30) -> dict:
+    """
+    Process savings rules for all recent transactions for a user.
+    Useful for backfilling or reprocessing.
+    
+    Args:
+        user: User instance
+        lookback_days: Number of days to look back for transactions
+        
+    Returns:
+        dict: Summary of processing results
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    start_date = timezone.now().date() - timedelta(days=lookback_days)
+    
+    # Get all transactions that haven't been processed for savings
+    transactions = Transaction.objects.filter(
+        user=user,
+        date__gte=start_date
+    ).exclude(
+        savings_contributions__isnull=False
+    )
+    
+    total_contributions = 0
+    total_amount = Decimal('0.00')
+    
+    for transaction in transactions:
+        contributions = process_savings_rules_for_transaction(transaction)
+        total_contributions += len(contributions)
+        total_amount += sum(c.amount for c in contributions)
+    
+    return {
+        'transactions_processed': transactions.count(),
+        'contributions_created': total_contributions,
+        'total_amount': float(total_amount)
     }
 

@@ -182,7 +182,7 @@ def fetch_transactions(account, start_date=None, end_date=None):
         error_message = str(exc.body) if exc.body else "Unknown Plaid error"
         
         try:
-            import json
+            # import json  # Removed redundant local import that caused UnboundLocalError
             if exc.body:
                 error_body = json.loads(exc.body) if isinstance(exc.body, str) else exc.body
                 error_code = error_body.get('error_code')

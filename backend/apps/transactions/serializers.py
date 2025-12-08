@@ -3,7 +3,8 @@ Serializers for transactions app.
 """
 from rest_framework import serializers
 from decimal import Decimal
-from .models import Transaction, Category
+from .models import Transaction, Category, TransactionSplit, Receipt
+from django.conf import settings
 
 
 class TransactionListSerializer(serializers.ModelSerializer):
@@ -255,3 +256,94 @@ class TransactionStatsSerializer(serializers.Serializer):
         max_digits=12, decimal_places=2, coerce_to_string=True
     )
 
+
+class TransactionSplitSerializer(serializers.ModelSerializer):
+    """Serializer for transaction splits."""
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    category_icon = serializers.CharField(source='category.icon', read_only=True)
+    category_color = serializers.CharField(source='category.color', read_only=True)
+    
+    class Meta:
+        model = TransactionSplit
+        fields = (
+            'split_id', 'category', 'category_name', 'category_icon', 
+            'category_color', 'amount', 'description', 'created_at'
+        )
+        read_only_fields = ('split_id', 'created_at')
+
+
+class ReceiptSerializer(serializers.ModelSerializer):
+    """Serializer for receipts."""
+    file_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Receipt
+        fields = (
+            'receipt_id', 'transaction', 'file', 'file_url', 'file_name',
+            'file_size', 'content_type', 'uploaded_at'
+        )
+        read_only_fields = ('receipt_id', 'uploaded_at', 'file_name', 'file_size', 'content_type')
+    
+    def get_file_url(self, obj):
+        """Return the file URL."""
+        if obj.file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.file.url)
+            return obj.file.url
+        return None
+    
+    def validate_file(self, value):
+        """Validate file type and size."""
+        # Check file size (max 10MB)
+        if value.size > 10 * 1024 * 1024:
+            raise serializers.ValidationError('File size cannot exceed 10MB')
+        
+        # Check file type
+        if value.content_type not in settings.ALLOWED_RECEIPT_TYPES:
+            raise serializers.ValidationError(
+                f'File type {value.content_type} is not allowed. '
+                f'Allowed types: {", ".join(settings.ALLOWED_RECEIPT_TYPES)}'
+            )
+        
+        return value
+    
+    def create(self, validated_data):
+        """Create receipt with file metadata."""
+        file = validated_data.get('file')
+        validated_data['file_name'] = file.name
+        validated_data['file_size'] = file.size
+        validated_data['content_type'] = file.content_type
+        return super().create(validated_data)
+
+
+class TransactionWithSplitsSerializer(serializers.ModelSerializer):
+    """Transaction serializer that includes splits."""
+    splits = TransactionSplitSerializer(many=True, read_only=True)
+    receipts = ReceiptSerializer(many=True, read_only=True)
+    category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
+    formatted_amount = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Transaction
+        fields = (
+            'transaction_id', 'merchant_name', 'description', 'amount', 'formatted_amount',
+            'date', 'category', 'category_name', 'splits', 'receipts', 'notes', 'created_at'
+        )
+        read_only_fields = ('transaction_id', 'created_at')
+    
+    def get_formatted_amount(self, obj):
+        """Format amount as currency string."""
+        return f"${abs(obj.amount):,.2f}"
+    
+    def validate(self, data):
+        """Validate splits sum equals transaction amount."""
+        splits_data = self.initial_data.get('splits', [])
+        if splits_data:
+            total = sum(Decimal(str(split.get('amount', 0))) for split in splits_data)
+            transaction_amount = abs(data.get('amount', Decimal('0')))
+            if total != transaction_amount:
+                raise serializers.ValidationError({
+                    'splits': f'Sum of splits ({total}) must equal transaction amount ({transaction_amount})'
+                })
+        return data

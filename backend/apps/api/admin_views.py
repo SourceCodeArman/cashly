@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, Avg
 from django.utils import timezone
 from datetime import timedelta
 
@@ -33,7 +33,10 @@ from django.db import connection
 from django.conf import settings
 import os
 import time
+import logging
 from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 try:
     import psutil
@@ -246,6 +249,37 @@ class AdminUserDetailView(generics.RetrieveUpdateDestroyAPIView):
             budget_count=Count('budgets', distinct=True),
             total_balance=Sum('accounts__balance')
         )
+
+    def perform_update(self, serializer):
+        """
+        Handle user updates with specific logic for subscription changes.
+        """
+        # Save the user first
+        super().perform_update(serializer)
+        
+        # Check if subscription tier was changed to free
+        if serializer.validated_data.get('subscription_tier') == 'free':
+            user = self.get_object()
+            
+            # Cancel any active subscription
+            subscription = Subscription.objects.filter(user=user).first()
+            if subscription:
+                subscription.status = 'canceled'
+                subscription.current_period_end = timezone.now()
+                
+                # Clear any pending changes
+                subscription.pending_plan = None
+                subscription.pending_billing_cycle = None
+                subscription.pending_price_id_monthly = None
+                subscription.pending_price_id_annual = None
+                subscription.pending_requested_at = None
+                
+                subscription.save()
+            
+            # Ensure user model reflects the cancellation
+            user.subscription_status = 'canceled'
+            user.subscription_end_date = timezone.now()
+            user.save()
     
     def destroy(self, request, *args, **kwargs):
         """Delete user and all related data."""
@@ -577,31 +611,111 @@ class AdminAPIAnalyticsView(APIView):
     permission_classes = [IsAuthenticated, IsSuperUser]
     
     def get(self, request):
-        """Get API analytics data."""
-        # Get all endpoint stats from cache
+        """Get comprehensive API analytics data from Redis (real-time) and database (historical)."""
+        try:
+            from .models import APIRequestLog, APIAnalyticsHourly
+            from django.db.models import Q
+            import numpy as np
+            
+            now = timezone.now()
+            twenty_four_hours_ago = now - timedelta(hours=24)
+            seven_days_ago = now - timedelta(days=7)
+            
+            # Get real-time stats from Redis cache
+            endpoint_stats = self._get_redis_stats()
+            
+            # Get 24-hour stats from database
+            logs_24h = APIRequestLog.objects.filter(timestamp__gte=twenty_four_hours_ago)
+            total_requests_24h = logs_24h.count()
+            total_errors_24h = logs_24h.filter(status_code__gte=400).count()
+            
+            # Get 7-day stats from hourly aggregates
+            hourly_stats_7d = APIAnalyticsHourly.objects.filter(hour__gte=seven_days_ago)
+            total_requests_7d = hourly_stats_7d.aggregate(total=Sum('request_count'))['total'] or 0
+            
+            # Calculate response time percentiles from recent logs
+            response_times = list(logs_24h.values_list('response_time_ms', flat=True)[:10000])
+            percentiles = self._calculate_percentiles(response_times)
+            
+            # Get hourly time series data (last 24 hours)
+            hourly_data = self._get_hourly_timeseries(twenty_four_hours_ago, now)
+            
+            # Get status code breakdown
+            status_breakdown = self._get_status_breakdown(logs_24h)
+            
+            # Calculate summary metrics
+            avg_response_time = logs_24h.aggregate(avg=Avg('response_time_ms'))['avg'] or 0
+            error_rate = (total_errors_24h / total_requests_24h * 100) if total_requests_24h > 0 else 0
+            requests_per_second = total_requests_24h / (24 * 3600) if total_requests_24h > 0 else 0
+            
+            # Get top endpoints from cache (real-time) and database (historical)
+            top_endpoints = self._get_top_endpoints(endpoint_stats, logs_24h)
+            
+            # Get HTTP method distribution
+            method_distribution = logs_24h.values('method').annotate(
+                count=Count('id')
+            ).order_by('-count')
+            
+            return Response({
+                'status': 'success',
+                'data': {
+                    'summary': {
+                        'total_requests_24h': total_requests_24h,
+                        'total_requests_7d': total_requests_7d,
+                        'total_errors_24h': total_errors_24h,
+                        'error_rate': round(error_rate, 2),
+                        'avg_response_time_ms': round(avg_response_time, 2),
+                        'requests_per_second': round(requests_per_second, 2),
+                    },
+                    'hourly_data': hourly_data,
+                    'endpoints': endpoint_stats,
+                    'top_endpoints': top_endpoints,
+                    'status_breakdown': status_breakdown,
+                    'response_time_percentiles': percentiles,
+                    'method_distribution': list(method_distribution),
+                },
+                'message': 'API analytics retrieved successfully'
+            })
+            
+        except Exception as e:
+            logger.error(f"Failed to retrieve API analytics: {e}")
+            # Return empty stats if there's an error
+            return Response({
+                'status': 'success',
+                'data': {
+                    'summary': {
+                        'total_requests_24h': 0,
+                        'total_requests_7d': 0,
+                        'total_errors_24h': 0,
+                        'error_rate': 0,
+                        'avg_response_time_ms': 0,
+                        'requests_per_second': 0,
+                    },
+                    'hourly_data': [],
+                    'endpoints': {},
+                    'top_endpoints': [],
+                    'status_breakdown': {},
+                    'response_time_percentiles': {},
+                    'method_distribution': [],
+                },
+                'message': 'API analytics retrieved (no data available yet)'
+            })
+    
+    def _get_redis_stats(self):
+        """Get real-time endpoint stats from Redis cache."""
         endpoint_stats = {}
         
-        # Scan cache for api_analytics keys
-        # Note: This is a simplified approach. In production, you'd want a better key management system
         try:
-            # Get all keys (this requires Redis-specific implementation)
-            # For now, we'll track a list of known endpoints
-            known_endpoints = [
-                '/api/v1/auth/login/',
-                '/api/v1/auth/register/',
-                '/api/v1/accounts/',
-                '/api/v1/transactions/',
-                '/api/v1/goals/',
-                '/api/v1/budgets/',
-                '/api/v1/dashboard/',
-            ]
+            # Get all tracked endpoints
+            all_endpoints = cache.get('api_analytics:all_endpoints', set())
             
-            for endpoint in known_endpoints:
-                for method in ['GET', 'POST', 'PATCH', 'DELETE']:
-                    key = f"api_analytics:{endpoint}:{method}"
-                    stats = cache.get(key)
-                    if stats:
-                        endpoint_key = f"{method} {endpoint}"
+            for endpoint_key in all_endpoints:
+                stats = cache.get(endpoint_key)
+                if stats:
+                    # Parse endpoint key to get method and path
+                    parts = endpoint_key.replace('api_analytics:', '').rsplit(':', 1)
+                    if len(parts) == 2:
+                        endpoint, method = parts
                         endpoint_stats[endpoint_key] = {
                             'endpoint': endpoint,
                             'method': method,
@@ -619,38 +733,113 @@ class AdminAPIAnalyticsView(APIView):
                             ),
                         }
         except Exception as e:
-            # If cache scanning fails, return empty stats
+            logger.debug(f"Could not retrieve Redis stats: {e}")
+        
+        return endpoint_stats
+    
+    def _calculate_percentiles(self, response_times):
+        """Calculate response time percentiles."""
+        if not response_times:
+            return {
+                'p50': 0,
+                'p75': 0,
+                'p90': 0,
+                'p95': 0,
+                'p99': 0,
+            }
+        
+        # Try numpy first, fallback to manual calculation
+        try:
+            import numpy as np
+            times = np.array(response_times)
+            return {
+                'p50': round(float(np.percentile(times, 50)), 2),
+                'p75': round(float(np.percentile(times, 75)), 2),
+                'p90': round(float(np.percentile(times, 90)), 2),
+                'p95': round(float(np.percentile(times, 95)), 2),
+                'p99': round(float(np.percentile(times, 99)), 2),
+            }
+        except (ImportError, ModuleNotFoundError):
+            # Fallback to manual calculation if numpy is not available
             pass
+        except Exception as e:
+            # Log other numpy errors but continue with fallback
+            logger.debug(f"Numpy percentile calculation failed: {e}, using fallback")
         
-        # Calculate summary stats
-        total_requests = sum(s.get('count', 0) for s in endpoint_stats.values())
-        total_errors = sum(s.get('error_count', 0) for s in endpoint_stats.values())
-        avg_response_time = (
-            sum(s.get('total_time', 0) for s in endpoint_stats.values()) / total_requests
-            if total_requests > 0 else 0
-        )
+        # Manual percentile calculation (fallback)
+        sorted_times = sorted(response_times)
+        length = len(sorted_times)
+        if length == 0:
+            return {
+                'p50': 0,
+                'p75': 0,
+                'p90': 0,
+                'p95': 0,
+                'p99': 0,
+            }
         
-        # Get top endpoints
-        top_endpoints = sorted(
-            endpoint_stats.items(),
-            key=lambda x: x[1].get('count', 0),
-            reverse=True
-        )[:10]
+        def percentile_index(p):
+            """Calculate index for percentile p (0-100)."""
+            return min(int(length * p / 100), length - 1)
         
-        return Response({
-            'status': 'success',
-            'data': {
-                'summary': {
-                    'total_requests': total_requests,
-                    'total_errors': total_errors,
-                    'error_rate': (total_errors / total_requests * 100) if total_requests > 0 else 0,
-                    'avg_response_time_ms': round(avg_response_time, 2),
-                },
-                'endpoints': dict(endpoint_stats),
-                'top_endpoints': [{'endpoint': k, **v} for k, v in top_endpoints],
-            },
-            'message': 'API analytics retrieved successfully'
-        })
+        return {
+            'p50': round(sorted_times[percentile_index(50)], 2),
+            'p75': round(sorted_times[percentile_index(75)], 2),
+            'p90': round(sorted_times[percentile_index(90)], 2),
+            'p95': round(sorted_times[percentile_index(95)], 2),
+            'p99': round(sorted_times[percentile_index(99)], 2),
+        }
+    
+    def _get_hourly_timeseries(self, start_time, end_time):
+        """Get hourly time series data for the specified period."""
+        from .models import APIAnalyticsHourly
+        
+        hourly_stats = APIAnalyticsHourly.objects.filter(
+            hour__gte=start_time,
+            hour__lt=end_time
+        ).values('hour').annotate(
+            requests=Sum('request_count'),
+            errors=Sum('error_count')
+        ).order_by('hour')
+        
+        return [
+            {
+                'hour': stat['hour'].strftime('%H'),
+                'requests': stat['requests'],
+                'errors': stat['errors'],
+            }
+            for stat in hourly_stats
+        ]
+    
+    def _get_status_breakdown(self, logs_queryset):
+        """Get status code breakdown."""
+        return {
+            '2xx': logs_queryset.filter(status_code__gte=200, status_code__lt=300).count(),
+            '3xx': logs_queryset.filter(status_code__gte=300, status_code__lt=400).count(),
+            '4xx': logs_queryset.filter(status_code__gte=400, status_code__lt=500).count(),
+            '5xx': logs_queryset.filter(status_code__gte=500, status_code__lt=600).count(),
+        }
+    
+    def _get_top_endpoints(self, redis_stats, logs_queryset):
+        """Get top endpoints by request count."""
+        # Get top endpoints from database
+        top_from_db = logs_queryset.values('endpoint', 'method').annotate(
+            count=Count('id'),
+            avg_time=Avg('response_time_ms'),
+            errors=Count('id', filter=Q(status_code__gte=400))
+        ).order_by('-count')[:10]
+        
+        return [
+            {
+                'endpoint': item['endpoint'],
+                'method': item['method'],
+                'count': item['count'],
+                'avg_response_time': round(item['avg_time'] or 0, 2),
+                'error_count': item['errors'],
+                'error_rate': round((item['errors'] / item['count'] * 100) if item['count'] > 0 else 0, 2),
+            }
+            for item in top_from_db
+        ]
 
 
 class AdminIntegrationsView(APIView):
@@ -798,8 +987,105 @@ class AdminDatabaseView(APIView):
                 'status': 'error',
                 'data': None,
                 'message': f'Failed to retrieve database stats: {str(e)}',
-                'traceback': traceback.format_exc() if settings.DEBUG else None
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AdminUserTrialManageView(APIView):
+    """
+    POST endpoint to manage user trial status.
+    Only accessible to superusers.
+    """
+    permission_classes = [IsAuthenticated, IsSuperUser]
+    
+    def post(self, request, user_id):
+        """Update user trial status."""
+        try:
+            from .admin_serializers import AdminUserTrialManageSerializer
+            
+            # Validate input
+            serializer = AdminUserTrialManageSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+            trial_end = serializer.validated_data['trialEnd']
+            
+            # Get user
+            try:
+                user = User.objects.get(id=user_id)
+            except User.DoesNotExist:
+                return Response(
+                    {'error': 'User not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get or create subscription
+            # We need to handle cases where user might not have a subscription record yet
+            subscription = Subscription.objects.filter(user=user).first()
+            
+            if not subscription:
+                # Create a dummy subscription record for trial tracking if none exists
+                # This is a simplification - in a real app you might want to create a proper Stripe sub
+                # But for admin overrides, we can create a local record
+                subscription = Subscription.objects.create(
+                    user=user,
+                    stripe_subscription_id=f"sub_admin_override_{user.id}_{int(time.time())}",
+                    stripe_customer_id=user.stripe_customer_id or f"cus_admin_override_{user.id}",
+                    status='trialing',
+                    plan='premium', # Default to premium for trials
+                    billing_cycle='monthly',
+                    current_period_start=timezone.now(),
+                    current_period_end=trial_end,
+                    trial_start=timezone.now(),
+                    trial_end=trial_end,
+                    price_id_monthly='price_admin_override',
+                    price_id_annual='price_admin_override'
+                )
+            else:
+                # Update existing subscription
+                subscription.trial_end = trial_end
+                
+                # Update status based on trial end date
+                if trial_end > timezone.now():
+                    subscription.status = 'trialing'
+                    # Also update current period end to match trial end if it's a trial
+                    if subscription.status == 'trialing':
+                        subscription.current_period_end = trial_end
+                else:
+                    # If ending trial now (date in past), cancel the subscription and expire it
+                    subscription.status = 'canceled'
+                    subscription.trial_end = trial_end
+                    subscription.current_period_end = trial_end
+                    
+                    # Clear any pending changes
+                    subscription.pending_plan = None
+                    subscription.pending_billing_cycle = None
+                    subscription.pending_price_id_monthly = None
+                    subscription.pending_price_id_annual = None
+                    subscription.pending_requested_at = None
+                
+                subscription.save()
+
+                # Sync User model fields
+                user.subscription_status = subscription.status
+                user.subscription_end_date = subscription.current_period_end
+                if subscription.status == 'canceled':
+                    user.subscription_tier = 'free'
+                user.save()
+            
+            return Response({
+                'status': 'success',
+                'message': 'User trial updated successfully',
+                'data': {
+                    'trialEnd': trial_end,
+                    'status': subscription.status
+                }
+            })
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class AdminDebugTriggerSyncView(APIView):

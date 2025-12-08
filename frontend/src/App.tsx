@@ -4,21 +4,30 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { AuthLayout } from '@/layouts/AuthLayout'
 import { ProtectedLayout } from '@/layouts/ProtectedLayout'
+import { AdminLayout } from '@/layouts/AdminLayout'
 import { useAuthStore } from '@/store/authStore'
 import { Landing } from '@/pages/Landing'
+import { WaitlistLanding } from '@/pages/WaitlistLanding'
 import { Pricing } from '@/pages/Pricing'
+import { Documentation } from '@/pages/Documentation'
 import { Login } from '@/pages/Login'
 import { Register } from '@/pages/Register'
 import { Dashboard } from '@/pages/Dashboard'
 import { Accounts } from '@/pages/Accounts'
 import { Transactions } from '@/pages/Transactions'
+import { RecurringTransactions } from '@/pages/RecurringTransactions'
 import { Goals } from '@/pages/Goals'
 import { Budgets } from '@/pages/Budgets'
+import Bills from '@/pages/Bills'
+import DebtsPage from '@/pages/DebtsPage'
 import { Categories } from '@/pages/Categories'
 import { Subscription } from '@/pages/Subscription'
 import { Notifications } from '@/pages/Notifications'
 import { Settings } from '@/pages/Settings'
+import Analytics from '@/pages/Analytics'
+import InsightsPage from '@/pages/InsightsPage'
 import { AdminDashboard } from '@/pages/AdminDashboard'
+import VerifyEmailChange from '@/pages/VerifyEmailChange'
 import { NotFound } from '@/pages/NotFound'
 import { PageTransition } from '@/components/PageTransition'
 
@@ -32,18 +41,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isSuperuser, user } = useAuthStore()
-
-  // Check both the store's isSuperuser flag and the user object
-  const hasAdminAccess = isAuthenticated && (isSuperuser || user?.isSuperuser)
-
-  if (!hasAdminAccess) {
-    return <Navigate to="/dashboard" replace />
-  }
-
-  return <>{children}</>
-}
 
 function AnimatedRoutes() {
   const location = useLocation()
@@ -53,7 +50,9 @@ function AnimatedRoutes() {
       <Routes location={location} key={location.pathname}>
         {/* Public Routes */}
         <Route path="/" element={<PageTransition><Landing /></PageTransition>} />
+        <Route path="/waitlist" element={<PageTransition><WaitlistLanding /></PageTransition>} />
         <Route path="/pricing" element={<PageTransition><Pricing /></PageTransition>} />
+        <Route path="/docs" element={<PageTransition><Documentation /></PageTransition>} />
 
         {/* Auth Routes */}
         <Route
@@ -73,6 +72,16 @@ function AnimatedRoutes() {
               <AuthLayout>
                 <Register />
               </AuthLayout>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/verify-email"
+          element={
+            <PageTransition>
+              <ProtectedRoute>
+                <VerifyEmailChange />
+              </ProtectedRoute>
             </PageTransition>
           }
         />
@@ -115,6 +124,18 @@ function AnimatedRoutes() {
           }
         />
         <Route
+          path="/recurring-transactions"
+          element={
+            <PageTransition>
+              <ProtectedRoute>
+                <ProtectedLayout>
+                  <RecurringTransactions />
+                </ProtectedLayout>
+              </ProtectedRoute>
+            </PageTransition>
+          }
+        />
+        <Route
           path="/goals"
           element={
             <PageTransition>
@@ -133,6 +154,30 @@ function AnimatedRoutes() {
               <ProtectedRoute>
                 <ProtectedLayout>
                   <Budgets />
+                </ProtectedLayout>
+              </ProtectedRoute>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/bills"
+          element={
+            <PageTransition>
+              <ProtectedRoute>
+                <ProtectedLayout>
+                  <Bills />
+                </ProtectedLayout>
+              </ProtectedRoute>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/debts"
+          element={
+            <PageTransition>
+              <ProtectedRoute>
+                <ProtectedLayout>
+                  <DebtsPage />
                 </ProtectedLayout>
               </ProtectedRoute>
             </PageTransition>
@@ -186,17 +231,39 @@ function AnimatedRoutes() {
             </PageTransition>
           }
         />
+        <Route
+          path="/analytics"
+          element={
+            <PageTransition>
+              <ProtectedRoute>
+                <ProtectedLayout>
+                  <Analytics />
+                </ProtectedLayout>
+              </ProtectedRoute>
+            </PageTransition>
+          }
+        />
+        <Route
+          path="/insights"
+          element={
+            <PageTransition>
+              <ProtectedRoute>
+                <ProtectedLayout>
+                  <InsightsPage />
+                </ProtectedLayout>
+              </ProtectedRoute>
+            </PageTransition>
+          }
+        />
 
         {/* Admin Route */}
         <Route
           path="/admin"
           element={
             <PageTransition>
-              <AdminRoute>
-                <ProtectedLayout>
-                  <AdminDashboard />
-                </ProtectedLayout>
-              </AdminRoute>
+              <AdminLayout>
+                <AdminDashboard />
+              </AdminLayout>
             </PageTransition>
           }
         />

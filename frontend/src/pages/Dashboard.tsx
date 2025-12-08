@@ -11,6 +11,9 @@ import { SpendingTrendWidget } from '@/components/dashboard/widgets/SpendingTren
 import { ActiveGoalsWidget } from '@/components/dashboard/widgets/ActiveGoalsWidget'
 import { RecentTransactionsWidget } from '@/components/dashboard/widgets/RecentTransactionsWidget'
 import { BudgetProgressWidget } from '@/components/dashboard/widgets/BudgetProgressWidget'
+import { SankeyWidget } from '@/components/dashboard/widgets/SankeyWidget'
+import { NetWorthWidget } from '@/components/dashboard/widgets/NetWorthWidget'
+import { RecommendationsWidget } from '@/components/dashboard/widgets/RecommendationsWidget'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 
@@ -66,6 +69,12 @@ export function Dashboard() {
         return <RecentTransactionsWidget transactions={transactionsData?.results || []} />
       case 'budgetProgress':
         return <BudgetProgressWidget />
+      case 'sankeyDiagram':
+        return <SankeyWidget className={layoutMode !== 'custom' ? "h-[400px]" : undefined} />
+      case 'netWorth':
+        return <NetWorthWidget />
+      case 'recommendations':
+        return <RecommendationsWidget />
       default:
         return null
     }

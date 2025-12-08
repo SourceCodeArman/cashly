@@ -1,5 +1,5 @@
 import apiClient from './apiClient'
-import type { ApiResponse, Notification, PaginatedResponse } from '@/types'
+import type { ApiResponse, Notification, PaginatedResponse, NotificationPreferences } from '@/types'
 
 export const notificationService = {
   async listNotifications(): Promise<ApiResponse<PaginatedResponse<Notification>>> {
@@ -30,6 +30,21 @@ export const notificationService = {
 
   async deleteNotification(id: string): Promise<ApiResponse<null>> {
     const response = await apiClient.delete<ApiResponse<null>>(`/notifications/${id}/`)
+    return response.data
+  },
+
+  async getPreferences(): Promise<ApiResponse<NotificationPreferences>> {
+    const response = await apiClient.get<ApiResponse<NotificationPreferences>>('/notifications/preferences/')
+    return response.data
+  },
+
+  async updatePreferences(
+    preferences: Partial<NotificationPreferences>
+  ): Promise<ApiResponse<NotificationPreferences>> {
+    const response = await apiClient.patch<ApiResponse<NotificationPreferences>>(
+      '/notifications/preferences/',
+      preferences
+    )
     return response.data
   },
 }

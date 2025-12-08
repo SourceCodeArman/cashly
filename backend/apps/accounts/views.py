@@ -1,10 +1,11 @@
 """
 Views for accounts app.
 """
+import pyotp
 import logging
 import threading
 
-from rest_framework import generics, status, viewsets
+from rest_framework import generics, status, viewsets, views
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -17,6 +18,7 @@ from django.utils.encoding import force_bytes, force_str
 from django.core.mail import send_mail
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.signing import TimestampSigner, BadSignature, SignatureExpired
 from django.db import transaction
 from django.utils import timezone
 
@@ -27,6 +29,7 @@ from .serializers import (
     UserSerializer,
     PasswordResetSerializer,
     PasswordResetConfirmSerializer,
+    PasswordChangeSerializer,
     AccountSerializer,
     AccountWithCountSerializer,
     LinkTokenRequestSerializer,
@@ -36,7 +39,12 @@ from .serializers import (
     PlaidIdentitySerializer,
     PlaidInvestmentSerializer,
     TransferCreateSerializer,
+    EmailChangeRequestSerializer,
+    EmailChangeVerifySerializer,
+    MFASetupSerializer,
+    MFALoginVerifySerializer,
 )
+from datetime import timedelta
 from .plaid_utils import (
     PlaidIntegrationError,
     create_link_token,
@@ -117,6 +125,24 @@ class UserLoginView(generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        
+        data = serializer.validated_data
+        
+        # Check for MFA requirement
+        if data.get('mfa_required'):
+            user = data['user']
+            # Generate temp token valid for 5 mins
+            signer = TimestampSigner()
+            temp_token = signer.sign(str(user.id))
+            
+            return Response({
+                'status': 'mfa_required',
+                'data': {
+                    'temp_token': temp_token,
+                    'user_id': user.id  # Optional, mainly for frontend context
+                },
+                'message': 'MFA verification required'
+            }, status=status.HTTP_200_OK)
         
         return Response({
             'status': 'success',
@@ -220,6 +246,38 @@ class PasswordResetConfirmView(generics.GenericAPIView):
             'status': 'success',
             'data': None,
             'message': 'Password reset successful'
+        }, status=status.HTTP_200_OK)
+
+class PasswordChangeView(generics.GenericAPIView):
+    """
+    POST /api/v1/auth/password-change
+    Change user password.
+    """
+    serializer_class = PasswordChangeSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        user = request.user
+        old_password = serializer.validated_data['old_password']
+        new_password = serializer.validated_data['new_password']
+        
+        if not user.check_password(old_password):
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': 'Invalid old password'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        user.set_password(new_password)
+        user.save()
+        
+        return Response({
+            'status': 'success',
+            'data': None,
+            'message': 'Password changed successfully'
         }, status=status.HTTP_200_OK)
 
 
@@ -462,6 +520,8 @@ class AccountConnectionView(generics.GenericAPIView):
                 # Continue with account creation if limit check fails
                 
             created_accounts = []
+            accounts_created = 0
+            duplicates_skipped = 0
             with transaction.atomic():
                 for account_payload in accounts_data:
                     plaid_account_id = account_payload["account_id"]
@@ -520,11 +580,15 @@ class AccountConnectionView(generics.GenericAPIView):
                         # This ensures initial sync fetches 90 days of transactions
                     }
 
-                    account_obj, _created = Account.objects.update_or_create(
+                    account_obj, created = Account.objects.update_or_create(
                         plaid_account_id=plaid_account_id,
                         defaults=defaults,
                     )
                     created_accounts.append(account_obj)
+                    if created:
+                        accounts_created += 1
+                    else:
+                        duplicates_skipped += 1
 
             if webhook_url:
                 try:
@@ -582,6 +646,8 @@ class AccountConnectionView(generics.GenericAPIView):
                 {
                     "status": "success",
                     "data": {
+                        "accounts_created": accounts_created,
+                        "duplicates_skipped": duplicates_skipped,
                         "accounts": serialized_accounts.data,
                         "item_id": item_id,
                         "products": products,
@@ -1120,3 +1186,345 @@ class AccountViewSet(viewsets.ModelViewSet):
                 'message': 'An unexpected error occurred. Please try again.',
                 'error_code': 'INTERNAL_ERROR'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class RequestEmailChangeView(generics.GenericAPIView):
+    """
+    POST /api/v1/auth/email-change/request
+    Request an email change.
+    """
+    serializer_class = EmailChangeRequestSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        user = request.user
+        new_email = serializer.validated_data['new_email']
+        password = serializer.validated_data['password']
+        
+        try:
+            from apps.accounts.services import create_email_change_request
+            from apps.notifications.tasks import send_email_change_verification
+            
+            # Create email change request (validates password and email)
+            request_obj = create_email_change_request(user, new_email, password)
+            
+            # Send verification email (async task)
+            send_email_change_verification.delay(request_obj.new_email, request_obj.token)
+            
+            # For development, return token in response
+            response_data = {'token': request_obj.token} if settings.DEBUG else None
+            
+            return Response({
+                'status': 'success',
+                'data': response_data,
+                'message': 'Verification email sent to your new email address'
+            }, status=status.HTTP_200_OK)
+            
+        except ValidationError as e:
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': str(e.message) if hasattr(e, 'message') else str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class VerifyEmailChangeView(generics.GenericAPIView):
+    """
+    POST /api/v1/auth/email-change/verify
+    Verify email change token.
+    """
+    serializer_class = EmailChangeVerifySerializer
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        token = serializer.validated_data['token']
+        
+        try:
+            from apps.accounts.services import verify_email_change_token
+            
+            # Verify token and update email (also sends notification to old email)
+            user = verify_email_change_token(token)
+            
+            return Response({
+                'status': 'success',
+                'data': {'email': user.email},
+                'message': 'Email updated successfully'
+            }, status=status.HTTP_200_OK)
+            
+        except ValidationError as e:
+            return Response({
+                'status': 'error',
+                'data': None,
+                'message': str(e.message) if hasattr(e, 'message') else str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class MFASetupView(views.APIView):
+    """
+    POST /api/v1/auth/mfa/setup
+    Generate MFA secret and QR code URL.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        # Generate secret
+        secret = pyotp.random_base32()
+        otp_uri = pyotp.totp.TOTP(secret).provisioning_uri(
+            name=request.user.email,
+            issuer_name="Cashly"
+        )
+        return Response({
+            'status': 'success',
+            'data': {
+                'secret': secret,
+                'otpauth_url': otp_uri
+            }
+        })
+
+
+class MFAVerifySetupView(views.APIView):
+    """
+    POST /api/v1/auth/mfa/verify-setup
+    Verify MFA code and enable MFA.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        serializer = MFASetupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        secret = serializer.validated_data['secret']
+        code = serializer.validated_data['code']
+        
+        # Verify the code against the provided secret
+        totp = pyotp.TOTP(secret)
+        if totp.verify(code):
+            user = request.user
+            user.mfa_enabled = True
+            user.mfa_secret = secret
+            user.save()
+            return Response({
+                'status': 'success', 
+                'message': 'MFA enabled successfully'
+            })
+        
+        return Response({
+            'status': 'error', 
+            'message': 'Invalid verification code'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class MFALoginVerifyView(views.APIView):
+    """
+    POST /api/v1/auth/mfa/verify-login
+    Verify MFA code during login and return tokens.
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        serializer = MFALoginVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        token = serializer.validated_data['token']
+        code = serializer.validated_data['code']
+        
+        signer = TimestampSigner()
+        try:
+            # unsign returns the value if valid, or raises exception
+            user_id = signer.unsign(token, max_age=300) # 5 mins
+            user = User.objects.get(id=user_id)
+        except (BadSignature, SignatureExpired):
+             return Response({
+                 'status': 'error', 
+                 'message': 'Invalid or expired session. Please log in again.'
+             }, status=status.HTTP_400_BAD_REQUEST)
+        except User.DoesNotExist:
+             return Response({
+                 'status': 'error', 
+                 'message': 'User not found.'
+             }, status=status.HTTP_400_BAD_REQUEST)
+             
+        if not user.mfa_enabled or not user.mfa_secret:
+             return Response({
+                 'status': 'error', 
+                 'message': 'MFA is not enabled for this user.'
+             }, status=status.HTTP_400_BAD_REQUEST)
+
+        totp = pyotp.TOTP(user.mfa_secret)
+        
+        # Allow bypass in development mode with specific code
+        is_dev_bypass = settings.DEBUG and code == "000000"
+        
+        if is_dev_bypass or totp.verify(code):
+             # Generate JWT
+             from rest_framework_simplejwt.tokens import RefreshToken
+             refresh = RefreshToken.for_user(user)
+             
+             return Response({
+                'status': 'success',
+                'data': {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                    'user': {
+                        'id': user.id,
+                        'email': user.email,
+                        'username': user.username,
+                        'is_superuser': user.is_superuser,
+                    }
+                },
+                'message': 'Login successful'
+            })
+            
+        return Response({
+            'status': 'error', 
+            'message': 'Invalid verification code'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class MFADisableView(views.APIView):
+    """
+    POST /api/v1/auth/mfa/disable
+    Disable MFA.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        user = request.user
+        user.mfa_enabled = False
+        user.mfa_secret = None
+        user.mfa_backup_codes = []
+        user.mfa_backup_codes_generated_at = None
+        user.save()
+        return Response({
+            'status': 'success', 
+            'message': 'MFA disabled successfully'
+        })
+
+
+class MFAGenerateBackupCodesView(views.APIView):
+    """
+    POST /api/v1/auth/mfa/backup-codes/generate
+    Generate new backup codes for MFA recovery.
+    
+    Requires MFA to be enabled. Returns 10 backup codes that should
+    be stored securely by the user. These codes can be used as a
+    fallback when the authenticator app is unavailable.
+    
+    Note: Generating new codes invalidates all previous codes.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        user = request.user
+        
+        if not user.mfa_enabled:
+            return Response({
+                'status': 'error',
+                'message': 'MFA must be enabled to generate backup codes'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Import utility functions
+        from .mfa_utils import generate_backup_codes, hash_backup_code
+        
+        # Generate new backup codes
+        plain_codes = generate_backup_codes(count=10)
+        
+        # Hash codes before storing
+        hashed_codes = [hash_backup_code(code) for code in plain_codes]
+        
+        # Store hashed codes
+        user.mfa_backup_codes = hashed_codes
+        user.mfa_backup_codes_generated_at = timezone.now()
+        user.save()
+        
+        return Response({
+            'status': 'success',
+            'data': {
+                'backup_codes': plain_codes,
+                'generated_at': user.mfa_backup_codes_generated_at.isoformat(),
+                'total_codes': len(plain_codes)
+            },
+            'message': 'Backup codes generated successfully. Store these codes securely - they will not be shown again.'
+        })
+
+
+class MFAVerifyBackupCodeView(views.APIView):
+    """
+    POST /api/v1/auth/mfa/backup-codes/verify
+    Verify a backup code during login (alternative to TOTP).
+    
+    This endpoint is used when a user cannot access their authenticator app.
+    Each backup code can only be used once.
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        from .serializers import MFABackupCodeVerifySerializer
+        from .mfa_utils import verify_and_consume_backup_code
+        
+        serializer = MFABackupCodeVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        token = serializer.validated_data['token']
+        code = serializer.validated_data['code']
+        
+        # Verify the temporary login token
+        signer = TimestampSigner()
+        try:
+            user_id = signer.unsign(token, max_age=300)  # 5 mins
+            user = User.objects.get(id=user_id)
+        except (BadSignature, SignatureExpired):
+            return Response({
+                'status': 'error',
+                'message': 'Invalid or expired session. Please log in again.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except User.DoesNotExist:
+            return Response({
+                'status': 'error',
+                'message': 'User not found.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not user.mfa_enabled:
+            return Response({
+                'status': 'error',
+                'message': 'MFA is not enabled for this user.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Verify and consume the backup code
+        success, error_message = verify_and_consume_backup_code(user, code)
+        
+        if not success:
+            return Response({
+                'status': 'error',
+                'message': error_message or 'Invalid backup code'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Generate JWT tokens
+        from rest_framework_simplejwt.tokens import RefreshToken
+        refresh = RefreshToken.for_user(user)
+        
+        # Get remaining codes count for user awareness
+        remaining_codes = len(user.mfa_backup_codes) if user.mfa_backup_codes else 0
+        
+        return Response({
+            'status': 'success',
+            'data': {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+                'user': {
+                    'id': user.id,
+                    'email': user.email,
+                    'username': user.username,
+                    'is_superuser': user.is_superuser,
+                },
+                'remaining_backup_codes': remaining_codes
+            },
+            'message': f'Login successful. You have {remaining_codes} backup codes remaining.'
+        })
+

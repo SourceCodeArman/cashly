@@ -97,7 +97,9 @@ export function Register() {
             if (redirectUrl) {
               navigate(decodeURIComponent(redirectUrl), { replace: true })
             } else {
-              navigate('/dashboard', { replace: true })
+              // Check if user is admin/superuser and redirect accordingly
+              const isAdmin = mappedUser.isSuperuser || mappedUser.isAdmin
+              navigate(isAdmin ? '/admin' : '/dashboard', { replace: true })
             }
           }
         } catch (loginError) {

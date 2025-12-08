@@ -48,12 +48,14 @@ export const adminService = {
     async getUsers(
         page: number = 1,
         pageSize: number = 10,
-        search: string = ''
+        search: string = '',
+        additionalParams?: Partial<UserListParams>
     ): Promise<PaginatedResponse<AdminUserListItem>> {
         const params: UserListParams = {
             page,
             page_size: pageSize,
             search: search || undefined,
+            ...additionalParams,
         }
         const response = await api.get('/admin/users/', { params })
         return response.data
@@ -188,5 +190,12 @@ export const adminService = {
     async testEndpoints(): Promise<AdminTestEndpoints> {
         const response = await api.get('/admin/debug/test-endpoints/')
         return response.data.data
+    },
+
+    /**
+     * Manage user trial status.
+     */
+    async manageUserTrial(userId: string, data: { trialEnd: string }): Promise<void> {
+        await api.post(`/admin/users/${userId}/trial/`, data)
     },
 }

@@ -246,7 +246,7 @@ export function Landing() {
                               <motion.path
                                 initial={{ pathLength: 0, opacity: 0 }}
                                 animate={{ pathLength: 1, opacity: 1 }}
-                                transition={{ duration: 1.5, ease: "easeInOut", delay: 0.5 }}
+                                transition={{ duration: 1.5, ease: "easeOut", delay: 0.5 }}
                                 d="M0,35 C10,32 20,25 30,28 C40,31 50,20 60,22 C70,24 80,15 90,10 L100,5"
                                 fill="none"
                                 stroke="hsl(var(--destructive))"
@@ -479,6 +479,7 @@ export function Landing() {
             <div className="flex gap-8 text-sm text-muted-foreground">
               <a href="#" className="hover:text-primary transition-colors">Privacy</a>
               <a href="#" className="hover:text-primary transition-colors">Terms</a>
+              <Link to="/docs" className="hover:text-primary transition-colors">Documentation</Link>
               <a href="#" className="hover:text-primary transition-colors">Contact</a>
             </div>
             <p className="text-sm text-muted-foreground">
