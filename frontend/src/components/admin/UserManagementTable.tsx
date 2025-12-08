@@ -1,17 +1,12 @@
 import { useState } from 'react'
 import {
-    Search,
     MoreHorizontal,
     Shield,
-    UserX,
-    UserCheck,
     CreditCard,
     Trash2,
     ChevronLeft,
     ChevronRight,
     Filter,
-    CheckSquare,
-    Square,
     ArrowUpDown,
     ArrowUp,
     ArrowDown,
@@ -22,7 +17,6 @@ import {
     Activity
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -81,9 +75,7 @@ export function UserManagementTable({
     totalCount,
     page,
     pageSize,
-    search,
     onPageChange,
-    onSearchChange,
     onViewDetails,
     onDeleteUser,
     onBulkDelete,

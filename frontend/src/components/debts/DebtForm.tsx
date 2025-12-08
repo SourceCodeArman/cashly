@@ -1,4 +1,3 @@
-import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -19,7 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import type { DebtCreateData, DebtType } from '@/types/debt.types';
+import type { DebtCreateData } from '@/types/debt.types';
 import { useCreateDebt, useUpdateDebt } from '@/hooks/useDebts';
 import { toast } from 'sonner';
 

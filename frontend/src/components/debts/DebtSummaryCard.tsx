@@ -1,4 +1,3 @@
-import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useDebtSummary } from '@/hooks/useDebts';
 import { Wallet, TrendingDown, Percent, CreditCard } from 'lucide-react';
@@ -26,31 +25,31 @@ export function DebtSummaryCard() {
         );
     }
 
-    if (!summary) return null;
+    if (!summary || !summary.data) return null;
 
     const stats = [
         {
             label: 'Total Balance',
-            value: formatCurrency(Number(summary.total_balance)),
+            value: formatCurrency(Number(summary.data.total_balance)),
             icon: Wallet,
             color: 'text-rose-500',
         },
         {
             label: 'Monthly Usage',
-            value: formatCurrency(Number(summary.total_minimum_payments)),
+            value: formatCurrency(Number(summary.data.total_minimum_payments)),
             subtext: 'Minimum Payments',
             icon: CreditCard,
             color: 'text-amber-500',
         },
         {
             label: 'Avg. Interest Rate',
-            value: `${Number(summary.average_interest_rate).toFixed(2)}%`,
+            value: `${Number(summary.data.average_interest_rate).toFixed(2)}%`,
             icon: Percent,
             color: 'text-blue-500',
         },
         {
             label: 'Total Paid Off',
-            value: formatCurrency(Number(summary.total_paid_off)),
+            value: formatCurrency(Number(summary.data.total_paid_off)),
             icon: TrendingDown,
             color: 'text-emerald-500',
         },

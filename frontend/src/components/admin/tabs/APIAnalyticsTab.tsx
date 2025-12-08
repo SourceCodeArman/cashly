@@ -2,16 +2,10 @@ import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RefreshCw, Activity, TrendingUp, AlertCircle, BarChart3, Zap, Clock, Server } from 'lucide-react'
 import { adminService } from '@/services/adminService'
-import { formatDate } from '@/lib/utils'
 import {
-  UserGrowthChart,
-  RevenueChart,
-  TransactionVolumeChart,
-  SubscriptionTiersChart,
   MetricCard
 } from '@/components/admin/DataVisualization'
 import {
@@ -25,7 +19,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -51,17 +44,17 @@ export function APIAnalyticsTab() {
     { percentile: 'P95', time: analytics.responseTimePercentiles.p95 },
     { percentile: 'P99', time: analytics.responseTimePercentiles.p99 },
   ] : []
-  
+
   // Calculate method distribution percentages
   const methodData = analytics?.methodDistribution || []
   const totalMethodRequests = methodData.reduce((sum, m) => sum + m.count, 0)
   const methodPercentages = methodData.map(m => ({
     name: m.method,
     value: totalMethodRequests > 0 ? Math.round((m.count / totalMethodRequests) * 100) : 0,
-    color: m.method === 'GET' ? '#10b981' : 
-           m.method === 'POST' ? '#3b82f6' : 
-           m.method === 'PUT' ? '#f59e0b' : 
-           m.method === 'DELETE' ? '#ef4444' : '#6b7280'
+    color: m.method === 'GET' ? '#10b981' :
+      m.method === 'POST' ? '#3b82f6' :
+        m.method === 'PUT' ? '#f59e0b' :
+          m.method === 'DELETE' ? '#ef4444' : '#6b7280'
   }))
 
   return (
@@ -128,14 +121,14 @@ export function APIAnalyticsTab() {
                   <BarChart3 className="h-5 w-5" />
                   API Requests (24h)
                 </CardTitle>
-          </CardHeader>
-          <CardContent>
+              </CardHeader>
+              <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <AreaChart data={apiUsageData}>
                     <defs>
                       <linearGradient id="apiUsage" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
@@ -159,8 +152,8 @@ export function APIAnalyticsTab() {
                     />
                   </AreaChart>
                 </ResponsiveContainer>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
             {/* Request Distribution */}
             <Card className="border-0 shadow-lg">
@@ -169,8 +162,8 @@ export function APIAnalyticsTab() {
                   <Activity className="h-5 w-5" />
                   Request Methods
                 </CardTitle>
-          </CardHeader>
-          <CardContent>
+              </CardHeader>
+              <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
@@ -203,9 +196,9 @@ export function APIAnalyticsTab() {
                       <span className="text-sm">{method.name} ({method.value}%)</span>
                     </div>
                   ))}
-            </div>
-          </CardContent>
-        </Card>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
 
@@ -218,8 +211,8 @@ export function APIAnalyticsTab() {
                   <Clock className="h-5 w-5" />
                   Response Time Percentiles
                 </CardTitle>
-          </CardHeader>
-          <CardContent>
+              </CardHeader>
+              <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={responseTimeData}>
                     <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
@@ -250,8 +243,8 @@ export function APIAnalyticsTab() {
                     />
                   </BarChart>
                 </ResponsiveContainer>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
             {/* Performance Metrics */}
             <Card className="border-0 shadow-lg">
@@ -260,7 +253,7 @@ export function APIAnalyticsTab() {
                   <TrendingUp className="h-5 w-5" />
                   Performance Overview
                 </CardTitle>
-          </CardHeader>
+              </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4">
                   <div className="flex items-center justify-between p-3 border rounded-lg">
@@ -301,35 +294,34 @@ export function APIAnalyticsTab() {
                       <div className="text-xs text-muted-foreground">Average RPS</div>
                     </div>
                   </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="endpoints" className="space-y-6">
           <Card className="border-0 shadow-lg">
-        <CardHeader>
+            <CardHeader>
               <CardTitle>Top Endpoints by Usage</CardTitle>
               <CardDescription>Most frequently accessed API endpoints in the last 24 hours</CardDescription>
-        </CardHeader>
-        <CardContent>
+            </CardHeader>
+            <CardContent>
               <div className="space-y-3">
                 {endpointData.length > 0 ? endpointData.map((endpoint, index) => (
-                <div
-                  key={index}
+                  <div
+                    key={index}
                     className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       <Badge
                         variant="outline"
-                        className={`font-mono text-xs ${
-                          endpoint.method === 'GET' ? 'border-green-500 text-green-600' :
-                          endpoint.method === 'POST' ? 'border-blue-500 text-blue-600' :
-                          endpoint.method === 'PUT' ? 'border-yellow-500 text-yellow-600' :
-                          endpoint.method === 'PATCH' ? 'border-purple-500 text-purple-600' :
-                          'border-red-500 text-red-600'
-                        }`}
+                        className={`font-mono text-xs ${endpoint.method === 'GET' ? 'border-green-500 text-green-600' :
+                            endpoint.method === 'POST' ? 'border-blue-500 text-blue-600' :
+                              endpoint.method === 'PUT' ? 'border-yellow-500 text-yellow-600' :
+                                endpoint.method === 'PATCH' ? 'border-purple-500 text-purple-600' :
+                                  'border-red-500 text-red-600'
+                          }`}
                       >
                         {endpoint.method}
                       </Badge>
@@ -346,19 +338,17 @@ export function APIAnalyticsTab() {
                         <div className="text-xs text-muted-foreground">avg time</div>
                       </div>
                       <div className="text-center">
-                        <div className={`font-medium ${
-                          endpoint.errorCount > 20 ? 'text-red-600' :
-                          endpoint.errorCount > 10 ? 'text-orange-600' : 'text-green-600'
-                        }`}>
+                        <div className={`font-medium ${endpoint.errorCount > 20 ? 'text-red-600' :
+                            endpoint.errorCount > 10 ? 'text-orange-600' : 'text-green-600'
+                          }`}>
                           {endpoint.errorCount}
                         </div>
                         <div className="text-xs text-muted-foreground">errors</div>
                       </div>
                       <div className="text-center">
-                        <div className={`font-medium ${
-                          endpoint.errorRate > 2 ? 'text-red-600' :
-                          endpoint.errorRate > 1 ? 'text-orange-600' : 'text-green-600'
-                        }`}>
+                        <div className={`font-medium ${endpoint.errorRate > 2 ? 'text-red-600' :
+                            endpoint.errorRate > 1 ? 'text-orange-600' : 'text-green-600'
+                          }`}>
                           {endpoint.errorRate.toFixed(1)}%
                         </div>
                         <div className="text-xs text-muted-foreground">error rate</div>
@@ -430,7 +420,7 @@ export function APIAnalyticsTab() {
                     <div className="text-right">
                       <div className="font-medium">{analytics?.statusBreakdown?.['5xx'] || 0}</div>
                       <div className="text-xs text-muted-foreground">
-                        {analytics?.summary.totalRequests24h 
+                        {analytics?.summary.totalRequests24h
                           ? ((analytics.statusBreakdown['5xx'] / analytics.summary.totalRequests24h) * 100).toFixed(1)
                           : '0'}%
                       </div>
@@ -445,7 +435,7 @@ export function APIAnalyticsTab() {
                     <div className="text-right">
                       <div className="font-medium">{analytics?.statusBreakdown?.['4xx'] || 0}</div>
                       <div className="text-xs text-muted-foreground">
-                        {analytics?.summary.totalRequests24h 
+                        {analytics?.summary.totalRequests24h
                           ? ((analytics.statusBreakdown['4xx'] / analytics.summary.totalRequests24h) * 100).toFixed(1)
                           : '0'}%
                       </div>
@@ -460,7 +450,7 @@ export function APIAnalyticsTab() {
                     <div className="text-right">
                       <div className="font-medium">{analytics?.statusBreakdown?.['3xx'] || 0}</div>
                       <div className="text-xs text-muted-foreground">
-                        {analytics?.summary.totalRequests24h 
+                        {analytics?.summary.totalRequests24h
                           ? ((analytics.statusBreakdown['3xx'] / analytics.summary.totalRequests24h) * 100).toFixed(1)
                           : '0'}%
                       </div>
@@ -471,19 +461,19 @@ export function APIAnalyticsTab() {
                     <div className="flex items-center gap-3">
                       <div className="w-3 h-3 rounded-full bg-green-500"></div>
                       <span className="font-medium">2xx Success</span>
-                      </div>
+                    </div>
                     <div className="text-right">
                       <div className="font-medium">{analytics?.statusBreakdown?.['2xx'] || 0}</div>
                       <div className="text-xs text-muted-foreground">
-                        {analytics?.summary.totalRequests24h 
+                        {analytics?.summary.totalRequests24h
                           ? ((analytics.statusBreakdown['2xx'] / analytics.summary.totalRequests24h) * 100).toFixed(1)
                           : '0'}%
                       </div>
                     </div>
                   </div>
                 </div>
-        </CardContent>
-      </Card>
+              </CardContent>
+            </Card>
           </div>
         </TabsContent>
       </Tabs>

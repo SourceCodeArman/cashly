@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Skeleton } from '@/components/ui/skeleton'
-import { goalService, type SavingsRule, type CreateSavingsRulePayload } from '@/services/goalService'
+import { goalService, type CreateSavingsRulePayload } from '@/services/goalService'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatCurrency } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -312,8 +312,8 @@ export function SavingsRulesManager() {
                   {rule.trigger === 'all_expenses'
                     ? 'All Expenses'
                     : rule.trigger === 'income'
-                    ? 'Income Only'
-                    : rule.category_name || 'Category'}
+                      ? 'Income Only'
+                      : rule.category_name || 'Category'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">

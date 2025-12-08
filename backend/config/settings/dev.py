@@ -6,7 +6,7 @@ from decouple import config
 
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', 'acetometrical-judah-needier.ngrok-free.dev']
 
 # Development-specific settings
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

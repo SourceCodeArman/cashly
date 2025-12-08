@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { useStrategyComparison, useStrategies, useCreateStrategy } from '@/hooks/useDebts'
+import { useStrategyComparison, useDebtStrategies, useCreateStrategy } from '@/hooks/useDebts'
 import { Loader2, Save, TrendingDown } from 'lucide-react'
 import type { StrategyType } from '@/types/debt.types'
 
@@ -26,9 +26,9 @@ export function DebtStrategy() {
 
     const { data: comparison, isLoading: isComparing } = useStrategyComparison(debouncedBudget)
     const { mutate: createStrategy, isPending: isSaving } = useCreateStrategy()
-    const { data: currentStrategies } = useStrategies()
+    const { data: currentStrategies } = useDebtStrategies()
 
-    const activeStrategy = currentStrategies?.find(s => s.is_active)
+    const activeStrategy = currentStrategies?.data?.find((s: { is_active: boolean }) => s.is_active)
 
     const handleSaveStrategy = () => {
         if (!debouncedBudget) return
@@ -85,11 +85,11 @@ export function DebtStrategy() {
                                     <div className="space-y-2">
                                         <div className="flex justify-between">
                                             <span>Time to Debt Free:</span>
-                                            <span className="font-bold">{comparison.snowball.months} months</span>
+                                            <span className="font-bold">{comparison.data.snowball?.months} months</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span>Total Interest:</span>
-                                            <span className="font-bold text-red-600">${parseFloat(comparison.snowball.total_interest).toLocaleString()}</span>
+                                            <span className="font-bold text-red-600">${parseFloat(comparison.data.snowball?.total_interest || '0').toLocaleString()}</span>
                                         </div>
                                     </div>
                                 </CardContent>
@@ -107,18 +107,18 @@ export function DebtStrategy() {
                                     <div className="space-y-2">
                                         <div className="flex justify-between">
                                             <span>Time to Debt Free:</span>
-                                            <span className="font-bold">{comparison.avalanche.months} months</span>
+                                            <span className="font-bold">{comparison.data.avalanche?.months} months</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span>Total Interest:</span>
-                                            <span className="font-bold text-red-600">${parseFloat(comparison.avalanche.total_interest).toLocaleString()}</span>
+                                            <span className="font-bold text-red-600">${parseFloat(comparison.data.avalanche?.total_interest || '0').toLocaleString()}</span>
                                         </div>
                                     </div>
 
-                                    {parseFloat(comparison.savings) > 0 && (
+                                    {parseFloat(comparison.data.savings || '0') > 0 && (
                                         <div className="mt-4 p-2 bg-green-50 text-green-700 rounded flex items-center gap-2 text-sm">
                                             <TrendingDown className="h-4 w-4" />
-                                            Saves ${parseFloat(comparison.savings).toLocaleString()} vs Snowball
+                                            Saves ${parseFloat(comparison.data.savings || '0').toLocaleString()} vs Snowball
                                         </div>
                                     )}
                                 </CardContent>

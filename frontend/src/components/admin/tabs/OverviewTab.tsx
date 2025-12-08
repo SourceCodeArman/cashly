@@ -4,13 +4,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { RefreshCw, Activity, TrendingUp, Users, CreditCard, Zap, Clock } from 'lucide-react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { adminService } from '@/services/adminService'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency } from '@/lib/utils'
 
 export function OverviewTab() {
-  const queryClient = useQueryClient()
 
   const { data: stats, isLoading: statsLoading, refetch } = useQuery({
     queryKey: ['admin', 'stats'],

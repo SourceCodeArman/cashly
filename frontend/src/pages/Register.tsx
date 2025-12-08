@@ -73,8 +73,14 @@ export function Register() {
 
           if (loginResponse.status === 'success' && loginResponse.data) {
             const { access, refresh, user } = loginResponse.data
+            if (!access || !refresh || !user) {
+              toast.error('Invalid login response')
+              navigate('/login', { replace: true })
+              return
+            }
+
             setTokens(access, refresh)
-            
+
             // Set user from login response (includes isSuperuser)
             const mappedUser = mapAuthUser(user)
             setUser(mappedUser)

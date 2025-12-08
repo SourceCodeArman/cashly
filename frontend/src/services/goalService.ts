@@ -61,20 +61,20 @@ const normalizeGoal = (goal: RawGoalData): Goal & { destination_account_id?: str
     typeof goal.is_active === 'boolean'
       ? goal.is_active
       : typeof goal.isActive === 'boolean'
-      ? goal.isActive
-      : false,
+        ? goal.isActive
+        : false,
   isCompleted:
     typeof goal.is_completed === 'boolean'
       ? goal.is_completed
       : typeof goal.isCompleted === 'boolean'
-      ? goal.isCompleted
-      : false, // Default to false if not provided
+        ? goal.isCompleted
+        : false, // Default to false if not provided
   progress:
     typeof goal.progress_percentage === 'number'
       ? goal.progress_percentage
       : typeof goal.progress === 'number'
-      ? goal.progress
-      : goal.progressPercentage,
+        ? goal.progress
+        : goal.progressPercentage,
   createdAt: goal.created_at ?? goal.createdAt,
   updatedAt: goal.updated_at ?? goal.updatedAt,
   destination_account_id: goal.destination_account_id ?? goal.destinationAccountId ?? undefined,
@@ -204,14 +204,14 @@ export const goalService = {
     return response.data
   },
 
-  async getSavingsRuleContributions(id: string): Promise<ApiResponse<SavingsContribution[]>> {
+  async getSavingsRuleContributions(id: string): Promise<ApiResponse<{ contributions: SavingsContribution[]; count: number; total_amount: number }>> {
     const response = await apiClient.get<ApiResponse<{ contributions: SavingsContribution[]; count: number; total_amount: number }>>(
       `/goals/savings-rules/${id}/contributions/`
     )
     return response.data
   },
 
-  async listSavingsContributions(): Promise<ApiResponse<SavingsContribution[]>> {
+  async listSavingsContributions(): Promise<ApiResponse<{ contributions: SavingsContribution[]; count: number; total_amount: number }>> {
     const response = await apiClient.get<ApiResponse<{ contributions: SavingsContribution[]; count: number; total_amount: number }>>(
       '/goals/savings-contributions/'
     )

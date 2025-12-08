@@ -10,6 +10,8 @@ import { PaymentHistory } from '@/components/debts/PaymentHistory'
 import { DebtModal } from '@/components/debts/DebtModal'
 import { Loader2 } from 'lucide-react'
 
+import type { DebtAccount } from '@/types/debt.types'
+
 export default function Debts() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
     const { data: debts, isLoading } = useDebts()
@@ -20,8 +22,8 @@ export default function Debts() {
     // Let's assume listDebts returns all and we can filter here or use params hook.
     // For MVP, just showing all provided by hook.
 
-    const activeDebts = debts?.filter(d => d.is_active) || []
-    const paidDebts = debts?.filter(d => !d.is_active) || []
+    const activeDebts = debts?.data?.filter((d: DebtAccount) => d.is_active) || []
+    const paidDebts = debts?.data?.filter((d: DebtAccount) => !d.is_active) || []
 
     if (isLoading) {
         return (
@@ -70,8 +72,8 @@ export default function Debts() {
                         </div>
                     ) : (
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            {activeDebts.map((debt) => (
-                                <DebtCard key={debt.debt_id} debt={debt} />
+                            {activeDebts.map((debt: DebtAccount) => (
+                                <DebtCard key={debt.debt_id} debt={debt} onViewDetails={() => { }} onRecordPayment={() => { }} />
                             ))}
                         </div>
                     )}
@@ -80,8 +82,8 @@ export default function Debts() {
                         <div className="mt-8">
                             <h3 className="text-xl font-semibold mb-4">Paid Off 🎉</h3>
                             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 opacity-75">
-                                {paidDebts.map((debt) => (
-                                    <DebtCard key={debt.debt_id} debt={debt} />
+                                {paidDebts.map((debt: DebtAccount) => (
+                                    <DebtCard key={debt.debt_id} debt={debt} onViewDetails={() => { }} onRecordPayment={() => { }} />
                                 ))}
                             </div>
                         </div>

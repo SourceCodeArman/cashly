@@ -5,7 +5,6 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RefreshCw, Database, Zap, Server, HardDrive, Cpu, MemoryStick, CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
 import { adminService } from '@/services/adminService'
-import type { AdminSystemHealth } from '@/types'
 
 export function SystemHealthTab() {
   const queryClient = useQueryClient()

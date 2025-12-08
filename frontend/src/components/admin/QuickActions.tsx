@@ -3,15 +3,8 @@ import {
   Zap,
   RefreshCw,
   Download,
-  Upload,
   Search,
   Settings,
-  UserPlus,
-  BarChart3,
-  Shield,
-  AlertTriangle,
-  CheckCircle,
-  X,
   Command
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -90,9 +83,6 @@ const defaultActions: QuickAction[] = [
 
 export function QuickActions({
   actions = defaultActions,
-  onRefresh,
-  onExport,
-  onImport,
   className = ""
 }: QuickActionsProps) {
   const [isOpen, setIsOpen] = useState(false)
@@ -119,7 +109,6 @@ export function QuickActions({
         const ctrlRequired = keys.includes('ctrl')
         const altRequired = keys.includes('alt')
         const shiftRequired = keys.includes('shift')
-        const metaRequired = keys.includes('cmd') || keys.includes('meta')
         const key = keys[keys.length - 1]
 
         const ctrlPressed = event.ctrlKey || event.metaKey
@@ -292,7 +281,6 @@ export function useKeyboardShortcuts(shortcuts: Record<string, () => void>) {
         const ctrlRequired = keys.includes('ctrl')
         const altRequired = keys.includes('alt')
         const shiftRequired = keys.includes('shift')
-        const metaRequired = keys.includes('cmd') || keys.includes('meta')
         const key = keys[keys.length - 1]
 
         const ctrlPressed = event.ctrlKey || event.metaKey

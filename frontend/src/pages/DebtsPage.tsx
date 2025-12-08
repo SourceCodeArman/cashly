@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { DebtSummaryCard } from '@/components/debts/DebtSummaryCard';
 import { DebtList } from '@/components/debts/DebtList';
 import { DebtModal } from '@/components/debts/DebtModal';
@@ -34,12 +34,6 @@ export default function DebtsPage() {
     // Handlers
     const handleAddDebt = () => {
         setSelectedDebtId(null);
-        setIsDebtModalOpen(true);
-    };
-
-    const handleEditDebt = (id: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        setSelectedDebtId(id);
         setIsDebtModalOpen(true);
     };
 

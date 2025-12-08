@@ -84,7 +84,7 @@ export const useUpdateDebt = () => {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: ({ id, data }: { id: string; data: DebtUpdateData }) => debtService.updateDebt(id, data),
-        onSuccess: (response, variables) => {
+        onSuccess: (_response, variables) => {
             queryClient.invalidateQueries({ queryKey: debtKeys.lists() });
             queryClient.invalidateQueries({ queryKey: debtKeys.detail(variables.id) });
             queryClient.invalidateQueries({ queryKey: debtKeys.summary() });
@@ -107,7 +107,7 @@ export const useMarkDebtPaidOff = () => {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (id: string) => debtService.markPaidOff(id),
-        onSuccess: (response, id) => {
+        onSuccess: (_response, id) => {
             queryClient.invalidateQueries({ queryKey: debtKeys.lists() });
             queryClient.invalidateQueries({ queryKey: debtKeys.detail(id) });
             queryClient.invalidateQueries({ queryKey: debtKeys.summary() });
@@ -119,7 +119,7 @@ export const useRecordDebtPayment = () => {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: (data: DebtPaymentCreateData) => debtService.recordPayment(data),
-        onSuccess: (response, variables) => {
+        onSuccess: (_response, variables) => {
             queryClient.invalidateQueries({ queryKey: debtKeys.lists() });
             queryClient.invalidateQueries({ queryKey: debtKeys.detail(variables.debt) });
             queryClient.invalidateQueries({ queryKey: debtKeys.summary() });

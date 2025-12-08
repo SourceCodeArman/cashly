@@ -5,12 +5,10 @@ import {
   Tag, CreditCard, Bell, DollarSign, BookOpen, BarChart, Repeat, Lightbulb, Receipt, Target
 } from 'lucide-react'
 import { NavLink } from './NavLink'
-import { useAuth } from '@/hooks/useAuth'
 import { useUIStore } from '@/store/uiStore'
 import { cn } from '@/lib/utils'
 
 export function AppSidebar() {
-  const { user } = useAuth()
   const { sidebarOpen } = useUIStore()
 
   return (

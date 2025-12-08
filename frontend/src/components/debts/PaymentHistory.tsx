@@ -21,7 +21,7 @@ export function PaymentHistory({ debtId }: PaymentHistoryProps) {
         )
     }
 
-    if (!payments?.length) {
+    if (!payments || !payments.data || payments.data.length === 0) {
         return (
             <Card>
                 <CardHeader>
@@ -54,7 +54,7 @@ export function PaymentHistory({ debtId }: PaymentHistoryProps) {
                             </tr>
                         </thead>
                         <tbody className="[&_tr:last-child]:border-0">
-                            {payments.map((payment) => (
+                            {payments.data.map((payment) => (
                                 <tr key={payment.payment_id} className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
                                     <td className="p-4 align-middle [&:has([role=checkbox])]:pr-0">
                                         {format(parseISO(payment.payment_date), 'MMM d, yyyy')}

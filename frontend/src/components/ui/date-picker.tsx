@@ -245,7 +245,6 @@ export function DatePicker({
   }
 
   const days = getDaysInMonth(currentMonth)
-  const selectedDate = value ? parseDateString(value) : null
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>

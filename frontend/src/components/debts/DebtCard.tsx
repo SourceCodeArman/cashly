@@ -1,11 +1,10 @@
-import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { DebtAccount } from '@/types/debt.types';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { ExternalLink, Calendar, TrendingUp } from 'lucide-react';
+import { TrendingUp, Calendar } from 'lucide-react';
 
 interface DebtCardProps {
     debt: DebtAccount;

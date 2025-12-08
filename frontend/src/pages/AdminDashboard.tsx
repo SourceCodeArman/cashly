@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import {
-  Shield,
   LayoutDashboard,
   Users,
   Heart,
@@ -10,16 +9,12 @@ import {
   Database,
   Wrench,
   Search,
-  Settings,
   ChevronRight,
-  Home,
-  RefreshCw
+  Home
 } from 'lucide-react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { QuickActions, useKeyboardShortcuts } from '@/components/admin/QuickActions'
+import { useKeyboardShortcuts } from '@/components/admin/QuickActions'
 import { OverviewTab } from '@/components/admin/tabs/OverviewTab'
 import { UsersTab } from '@/components/admin/tabs/UsersTab'
 import { SystemHealthTab } from '@/components/admin/tabs/SystemHealthTab'
@@ -44,10 +39,8 @@ const navigationItems = [
 
 export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('overview')
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [globalSearch, setGlobalSearch] = useState('')
   const [breadcrumb, setBreadcrumb] = useState(['Admin Dashboard'])
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [navigationHistory, setNavigationHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
 
@@ -83,12 +76,8 @@ export function AdminDashboard() {
     }
   }
 
-  const canGoBack = historyIndex > 0
-  const canGoForward = historyIndex < navigationHistory.length - 1
-
   // Global refresh function
   const handleGlobalRefresh = async () => {
-    setIsRefreshing(true)
     try {
       // Refresh all admin data
       await Promise.all([
@@ -99,8 +88,6 @@ export function AdminDashboard() {
       toast.success('All data refreshed successfully')
     } catch (error) {
       toast.error('Failed to refresh some data')
-    } finally {
-      setIsRefreshing(false)
     }
   }
 
@@ -120,46 +107,6 @@ export function AdminDashboard() {
     'alt+h': () => window.open('/admin/docs', '_blank'),
   })
 
-  // Quick actions for the admin dashboard
-  const quickActions = [
-    {
-      id: 'refresh-all',
-      label: 'Refresh All Data',
-      description: 'Reload all admin dashboard data',
-      icon: RefreshCw,
-      shortcut: 'Ctrl+R',
-      action: handleGlobalRefresh,
-      category: 'common' as const
-    },
-    {
-      id: 'switch-overview',
-      label: 'Go to Overview',
-      description: 'Navigate to system overview',
-      icon: LayoutDashboard,
-      shortcut: 'Ctrl+1',
-      action: () => setActiveTab('overview'),
-      category: 'common' as const
-    },
-    {
-      id: 'switch-users',
-      label: 'Go to Users',
-      description: 'Navigate to user management',
-      icon: Users,
-      shortcut: 'Ctrl+2',
-      action: () => setActiveTab('users'),
-      category: 'user' as const
-    },
-    {
-      id: 'switch-health',
-      label: 'Go to Health',
-      description: 'Navigate to system health',
-      icon: Heart,
-      shortcut: 'Ctrl+3',
-      action: () => setActiveTab('health'),
-      category: 'system' as const
-    }
-  ]
-
   const NavigationContent = ({ isMobile = false }: { isMobile?: boolean }) => {
     const shortcuts = ['1', '2', '3', '4', '5', '6', '7', '8']
 
@@ -170,12 +117,11 @@ export function AdminDashboard() {
           const isActive = activeTab === item.id
           const shortcut = shortcuts[index]
 
-  return (
+          return (
             <button
               key={item.id}
               onClick={() => {
                 setActiveTab(item.id)
-                if (isMobile) setIsMobileMenuOpen(false)
               }}
               className={`
                 w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-all duration-200 group
@@ -194,10 +140,9 @@ export function AdminDashboard() {
                   {item.description}
                 </div>
               </div>
-        <div className="flex items-center gap-2">
-                <kbd className={`hidden group-hover:inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-mono ${
-                  isActive ? 'bg-primary/20 border-primary/30' : 'bg-muted border-border'
-                }`}>
+              <div className="flex items-center gap-2">
+                <kbd className={`hidden group-hover:inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-mono ${isActive ? 'bg-primary/20 border-primary/30' : 'bg-muted border-border'
+                  }`}>
                   {shortcut}
                 </kbd>
                 {isActive && <ChevronRight className="h-4 w-4 text-primary" />}
@@ -269,43 +214,43 @@ export function AdminDashboard() {
                   className="pl-9 pr-4"
                 />
               </div>
-      </div>
+            </div>
 
             {/* Tab Content */}
             <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsContent value="overview" className="mt-0">
-          <OverviewTab />
-        </TabsContent>
+                  <OverviewTab />
+                </TabsContent>
 
                 <TabsContent value="users" className="mt-0">
-          <UsersTab />
-        </TabsContent>
+                  <UsersTab />
+                </TabsContent>
 
                 <TabsContent value="health" className="mt-0">
-          <SystemHealthTab />
-        </TabsContent>
+                  <SystemHealthTab />
+                </TabsContent>
 
                 <TabsContent value="logs" className="mt-0">
-          <LogsTab />
-        </TabsContent>
+                  <LogsTab />
+                </TabsContent>
 
                 <TabsContent value="analytics" className="mt-0">
-          <APIAnalyticsTab />
-        </TabsContent>
+                  <APIAnalyticsTab />
+                </TabsContent>
 
                 <TabsContent value="integrations" className="mt-0">
-          <IntegrationsTab />
-        </TabsContent>
+                  <IntegrationsTab />
+                </TabsContent>
 
                 <TabsContent value="database" className="mt-0">
-          <DatabaseTab />
-        </TabsContent>
+                  <DatabaseTab />
+                </TabsContent>
 
                 <TabsContent value="debug" className="mt-0">
-          <DebuggingToolsTab />
-        </TabsContent>
-      </Tabs>
+                  <DebuggingToolsTab />
+                </TabsContent>
+              </Tabs>
             </div>
           </div>
         </div>

@@ -20,7 +20,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import type { DebtAccount, CreateDebtPaymentForm, PaymentType } from '@/types/debt.types'
+import type { DebtAccount, DebtPaymentCreateData, PaymentType } from '@/types/debt.types'
 import { useRecordDebtPayment } from '@/hooks/useDebts'
 
 const paymentTypes: { value: PaymentType; label: string }[] = [
@@ -56,14 +56,15 @@ export function DebtPaymentForm({ debt, onSuccess }: DebtPaymentFormProps) {
 
     const onSubmit = async (values: z.infer<typeof formSchema>) => {
         try {
-            const payload: CreateDebtPaymentForm = {
+            const payload: DebtPaymentCreateData = {
+                debt: debt.debt_id,
                 amount: values.amount,
                 payment_date: values.payment_date,
                 payment_type: values.payment_type,
                 notes: values.notes,
             }
 
-            await recordPayment.mutateAsync({ debtId: debt.debt_id, data: payload })
+            await recordPayment.mutateAsync(payload)
             onSuccess()
         } catch (error) {
             console.error('Failed to record payment', error)

@@ -6,15 +6,15 @@ import { cn } from '@/lib/utils'
 const formatCurrencyInput = (value: string): string => {
   // Remove all non-digit characters
   const digits = value.replace(/\D/g, '')
-  
+
   if (!digits) return ''
-  
+
   // Handle as string to prevent precision loss with large numbers
   // Split into dollars and cents (last 2 digits are cents)
   // If there are fewer than 2 digits, all digits are cents
   let dollarsStr = ''
   let centsStr = ''
-  
+
   if (digits.length <= 2) {
     // 1 or 2 digits: all are cents
     dollarsStr = '0'
@@ -23,31 +23,31 @@ const formatCurrencyInput = (value: string): string => {
     // 3+ digits: last 2 are cents, rest are dollars
     dollarsStr = digits.slice(0, -2)
     centsStr = digits.slice(-2)
-    
+
     // Remove leading zeros from dollars part
     dollarsStr = dollarsStr.replace(/^0+/, '') || '0'
   }
-  
+
   // Add commas to dollars part (only if it's not just '0')
   if (dollarsStr && dollarsStr !== '0') {
     dollarsStr = dollarsStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
   }
-  
+
   return `$${dollarsStr}.${centsStr}`
 }
 
 const parseCurrencyInput = (value: string): number => {
   // Remove all non-digit characters
   const digits = value.replace(/\D/g, '')
-  
+
   if (!digits) return 0
-  
+
   // Parse as string first, then convert to number
   // This preserves precision for large numbers
   // Same logic as formatCurrencyInput
   let dollarsStr = ''
   let centsStr = ''
-  
+
   if (digits.length <= 2) {
     // 1 or 2 digits: all are cents
     dollarsStr = '0'
@@ -56,18 +56,18 @@ const parseCurrencyInput = (value: string): number => {
     // 3+ digits: last 2 are cents, rest are dollars
     dollarsStr = digits.slice(0, -2)
     centsStr = digits.slice(-2)
-    
+
     // Remove leading zeros from dollars part
     dollarsStr = dollarsStr.replace(/^0+/, '') || '0'
   }
-  
+
   // Convert to number by combining dollars and cents
   // For very large numbers, we still need to be careful
   // But this approach minimizes precision loss
   return parseFloat(`${dollarsStr}.${centsStr}`)
 }
 
-export interface CurrencyInputProps extends Omit<React.ComponentProps<typeof Input>, 'type' | 'value' | 'onChange'> {
+export interface CurrencyInputProps extends Omit<React.ComponentProps<typeof Input>, 'type' | 'value' | 'onChange' | 'onBlur'> {
   value?: number
   onChange?: (value: number) => void
   onBlur?: (value: number) => void
@@ -96,11 +96,11 @@ const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
       // Extract only new digits from the input
       const newDigits = e.target.value.replace(/\D/g, '')
       setRawDigits(newDigits)
-      
+
       // Format the raw digits
       const formatted = formatCurrencyInput(newDigits)
       setDisplayValue(formatted)
-      
+
       // Parse and call onChange with numeric value
       const numericValue = parseCurrencyInput(newDigits)
       onChange?.(numericValue)

@@ -5,8 +5,8 @@ type MessageHandler = (data: any) => void
 class SocketService {
   private socket: WebSocket | null = null
   private handlers: Set<MessageHandler> = new Set()
-  private reconnectTimer: NodeJS.Timeout | null = null
-  private isConnecting = false
+  private reconnectTimer: number | null = null
+
   private explicitDisconnect = false
 
   public connect() {
@@ -17,15 +17,15 @@ class SocketService {
       return
     }
 
+
     this.explicitDisconnect = false
-    this.isConnecting = true
 
     // Determine protocol (ws vs wss)
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     // Use backend URL from environment or default to localhost:8000
     // If using Vite proxy, we might need to adjust. Assuming direct connection for now or proxy.
     // Ideally, this comes from an env var.
-    const host = 'localhost:8000' 
+    const host = 'localhost:8000'
     const wsUrl = `${protocol}//${host}/ws/notifications/?token=${token}`
 
     console.log('Connecting to WebSocket:', wsUrl)
@@ -34,7 +34,6 @@ class SocketService {
 
     this.socket.onopen = () => {
       console.log('WebSocket connected')
-      this.isConnecting = false
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer)
         this.reconnectTimer = null
@@ -53,8 +52,7 @@ class SocketService {
     this.socket.onclose = (event) => {
       console.log('WebSocket disconnected', event.code, event.reason)
       this.socket = null
-      this.isConnecting = false
-      
+
       if (!this.explicitDisconnect) {
         // Try to reconnect in 5 seconds
         this.reconnectTimer = setTimeout(() => {

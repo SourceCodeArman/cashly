@@ -1,4 +1,3 @@
-import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useDebtProjection } from '@/hooks/useDebts';
 import {
@@ -34,7 +33,7 @@ export function DebtProjectionChart({ debtId, monthlyPayment }: DebtProjectionCh
         );
     }
 
-    if (!data || data.projection.length === 0) {
+    if (!data || !data.data || data.data.projection.length === 0) {
         return null;
     }
 
@@ -47,7 +46,7 @@ export function DebtProjectionChart({ debtId, monthlyPayment }: DebtProjectionCh
                 <div className="h-[300px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart
-                            data={data.projection}
+                            data={data.data.projection}
                             margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
                         >
                             <defs>
@@ -83,8 +82,8 @@ export function DebtProjectionChart({ debtId, monthlyPayment }: DebtProjectionCh
                     </ResponsiveContainer>
                 </div>
                 <div className="mt-4 text-center text-sm text-muted-foreground">
-                    Projected payoff in <span className="font-bold text-foreground">{data.months_to_payoff} months</span> with
-                    total interest of <span className="font-bold text-foreground">{formatCurrency(Number(data.total_interest))}</span>
+                    Projected payoff in <span className="font-bold text-foreground">{data.data.months_to_payoff} months</span> with
+                    total interest of <span className="font-bold text-foreground">{formatCurrency(Number(data.data.total_interest))}</span>
                 </div>
             </CardContent>
         </Card>

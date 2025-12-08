@@ -1,4 +1,3 @@
-import React from 'react';
 import { DebtCard } from './DebtCard';
 import type { DebtAccount } from '@/types/debt.types';
 import { Button } from '@/components/ui/button';

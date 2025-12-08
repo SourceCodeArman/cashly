@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, ReactNode } from 'react'
+import { useState, useCallback, useEffect, type ReactNode } from 'react'
 import { usePlaidLink } from 'react-plaid-link'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -111,11 +111,11 @@ export function PlaidLink({ children }: PlaidLinkProps) {
     const availableAccountIds = accounts
       .filter((account) => !isAccountAlreadyConnected(account.id))
       .map((account) => account.id)
-    
+
     // If all available accounts are already selected, deselect all
     // Otherwise, select all available accounts
     const allSelected = availableAccountIds.every((id) => selectedAccountIds.includes(id))
-    
+
     if (allSelected) {
       setSelectedAccountIds([])
     } else {
@@ -145,9 +145,9 @@ export function PlaidLink({ children }: PlaidLinkProps) {
       if (response.status === 'success' && response.data) {
         const accounts_created = response.data.accounts_created ?? response.data.accounts?.length ?? 0
         const duplicates_skipped = response.data.duplicates_skipped ?? 0
-        
+
         queryClient.invalidateQueries({ queryKey: queryKeys.accounts })
-        
+
         if (accounts_created > 0 || duplicates_skipped > 0) {
           toast.success(
             `${accounts_created} account(s) linked${duplicates_skipped > 0 ? `, ${duplicates_skipped} duplicate(s) skipped` : ''}`
@@ -155,7 +155,7 @@ export function PlaidLink({ children }: PlaidLinkProps) {
         } else {
           toast.success('Accounts connected successfully')
         }
-        
+
         setShowAccountDialog(false)
         setPublicToken(null)
         setAccounts([])
@@ -166,22 +166,22 @@ export function PlaidLink({ children }: PlaidLinkProps) {
       }
     } catch (error: unknown) {
       console.error('Connect accounts error:', error)
-      
+
       // Extract error message from various error formats
       let errorMessage = 'An error occurred. Please try again.'
-      
+
       if (error && typeof error === 'object') {
         // Check for axios error format
         if ('response' in error && error.response) {
           const response = error.response as { data?: { message?: string } }
           errorMessage = response.data?.message || errorMessage
-        } 
+        }
         // Check for error object with message property
         else if ('message' in error && typeof error.message === 'string') {
           errorMessage = error.message
         }
       }
-      
+
       toast.error(errorMessage)
     } finally {
       setLoading(false)

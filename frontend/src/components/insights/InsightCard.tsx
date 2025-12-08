@@ -1,7 +1,7 @@
 /**
  * InsightCard - Displays a single insight with actions.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -125,11 +125,7 @@ const formatMetadataValue = (key: string, value: unknown): string => {
     return JSON.stringify(value);
 };
 
-const formatMetadataKey = (key: string): string => {
-    return key
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, l => l.toUpperCase());
-};
+
 
 // Type for subscription metadata items
 interface SubscriptionItem {

@@ -78,6 +78,14 @@ export interface DebtPaymentCreateData {
     notes?: string;
 }
 
+// Form submission type used in frontend components
+export interface CreateDebtPaymentForm {
+    amount: string;
+    payment_date: string;
+    payment_type: PaymentType;
+    notes?: string;
+}
+
 export interface DebtPayoffStrategy {
     strategy_id: string;
     strategy_type: StrategyType;

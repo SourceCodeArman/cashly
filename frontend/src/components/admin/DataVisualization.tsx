@@ -12,11 +12,9 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer
 } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { TrendingUp, TrendingDown, Users, DollarSign, Activity, BarChart3 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
@@ -133,9 +131,8 @@ export function MetricCard({ title, value, change, icon: Icon, color = "primary"
                 ) : (
                   <TrendingDown className="h-3 w-3 text-red-600" />
                 )}
-                <span className={`text-sm font-medium ${
-                  change.isPositive ? 'text-green-600' : 'text-red-600'
-                }`}>
+                <span className={`text-sm font-medium ${change.isPositive ? 'text-green-600' : 'text-red-600'
+                  }`}>
                   {change.value}% {change.label}
                 </span>
               </div>
@@ -166,8 +163,8 @@ export function UserGrowthChart() {
           <AreaChart data={data}>
             <defs>
               <linearGradient id="userGrowth" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.3}/>
-                <stop offset="95%" stopColor={COLORS.primary} stopOpacity={0}/>
+                <stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.3} />
+                <stop offset="95%" stopColor={COLORS.primary} stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
@@ -344,7 +341,7 @@ export function SubscriptionTiersChart() {
                 paddingAngle={2}
                 dataKey="value"
               >
-                {data.map((entry, index) => (
+                {data.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                 ))}
               </Pie>

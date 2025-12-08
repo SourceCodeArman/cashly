@@ -36,10 +36,10 @@ const formSchema = z.object({
     accountId: z.string().optional(),
     payee: z.string().optional(),
     notes: z.string().optional(),
-    isAutopay: z.boolean().default(false),
-    reminderEnabled: z.boolean().default(true),
+    isAutopay: z.boolean(),
+    reminderEnabled: z.boolean(),
     reminderDays: z.coerce.number().min(0).max(30),
-    isActive: z.boolean().default(true),
+    isActive: z.boolean(),
 })
 
 interface BillFormProps {
@@ -68,7 +68,9 @@ export function BillForm({ initialData, onSubmit, isLoading }: BillFormProps) {
         isActive: initialData?.isActive ?? true,
     }
 
-    const form = useForm<z.infer<typeof formSchema>>({
+    type FormValues = z.infer<typeof formSchema>
+
+    const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         defaultValues,
     })
