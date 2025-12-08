@@ -8,6 +8,7 @@ export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true', // Bypass ngrok warning page
   },
 })
 
@@ -60,7 +61,7 @@ apiClient.interceptors.response.use(
   },
   async (error: AxiosError<ApiResponse<unknown>>) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
-    
+
     if (!originalRequest) {
       return Promise.reject(error)
     }
