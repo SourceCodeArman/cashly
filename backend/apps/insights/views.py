@@ -95,6 +95,15 @@ class InsightViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def summary(self, request):
         """Get insight summary counts."""
+        from django.core.cache import cache
+        
+        user = request.user
+        cache_key = f'insights_summary_user_{user.id}'
+        
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+        
         queryset = Insight.objects.filter(
             user=request.user,
             is_dismissed=False
@@ -111,12 +120,17 @@ class InsightViewSet(viewsets.ModelViewSet):
         for insight_type in queryset.values_list('insight_type', flat=True).distinct():
             by_type[insight_type] = queryset.filter(insight_type=insight_type).count()
         
-        return Response({
+        response_data = {
             'total': total,
             'unread': unread,
             'by_priority': by_priority,
             'by_type': by_type
-        })
+        }
+        
+        # Cache for 120 seconds
+        cache.set(cache_key, response_data, 120)
+        
+        return Response(response_data)
 
 
 class InsightFeedbackView(APIView):

@@ -15,7 +15,7 @@ import { Register } from '@/pages/Register'
 import { Dashboard } from '@/pages/Dashboard'
 import { Accounts } from '@/pages/Accounts'
 import { Transactions } from '@/pages/Transactions'
-import { RecurringTransactions } from '@/pages/RecurringTransactions'
+
 import { Goals } from '@/pages/Goals'
 import { Budgets } from '@/pages/Budgets'
 import Bills from '@/pages/Bills'
@@ -123,17 +123,10 @@ function AnimatedRoutes() {
             </PageTransition>
           }
         />
+        {/* Redirect legacy recurring transactions route */}
         <Route
           path="/recurring-transactions"
-          element={
-            <PageTransition>
-              <ProtectedRoute>
-                <ProtectedLayout>
-                  <RecurringTransactions />
-                </ProtectedLayout>
-              </ProtectedRoute>
-            </PageTransition>
-          }
+          element={<Navigate to="/bills?tab=recurring" replace />}
         />
         <Route
           path="/goals"

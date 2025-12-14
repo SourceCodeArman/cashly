@@ -16,11 +16,18 @@ import { NetWorthWidget } from '@/components/dashboard/widgets/NetWorthWidget'
 import { RecommendationsWidget } from '@/components/dashboard/widgets/RecommendationsWidget'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { useEffect } from 'react'
 
 export function Dashboard() {
   const { data: dashboardData, isLoading: isDashboardLoading } = useDashboard()
   const { data: transactionsData, isLoading: isTransactionsLoading } = useTransactions({ limit: 5 })
   const { layoutMode, widgets } = useDashboardStore()
+
+  useEffect(() => {
+    if (!isDashboardLoading && dashboardData) {
+      console.log('Dashboard Data:', dashboardData)
+    }
+  }, [isDashboardLoading, dashboardData])
 
   const isLoading = isDashboardLoading || isTransactionsLoading
 

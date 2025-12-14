@@ -16,6 +16,8 @@ FEATURE_AI_CATEGORIZATION = 'ai_categorization'
 FEATURE_ADVANCED_ANALYTICS = 'advanced_analytics'
 FEATURE_EXPORT = 'export'
 FEATURE_TRANSFER_AUTHORIZATION = 'transfer_authorization'
+FEATURE_CUSTOM_CATEGORIES = 'custom_categories'
+FEATURE_CATEGORY_RULES = 'category_rules'
 
 # Tier constants
 TIER_FREE = 'free'
@@ -46,6 +48,8 @@ SUBSCRIPTION_LIMITS: Dict[str, Dict[str, Any]] = {
         FEATURE_ADVANCED_ANALYTICS: False,
         FEATURE_EXPORT: False,
         FEATURE_TRANSFER_AUTHORIZATION: False,
+        FEATURE_CUSTOM_CATEGORIES: False,
+        FEATURE_CATEGORY_RULES: False,
     },
     TIER_PREMIUM: {
         FEATURE_ACCOUNTS: UNLIMITED,
@@ -58,6 +62,8 @@ SUBSCRIPTION_LIMITS: Dict[str, Dict[str, Any]] = {
         FEATURE_ADVANCED_ANALYTICS: True,
         FEATURE_EXPORT: True,
         FEATURE_TRANSFER_AUTHORIZATION: True,
+        FEATURE_CUSTOM_CATEGORIES: True,
+        FEATURE_CATEGORY_RULES: True,
     },
     TIER_PRO: {
         FEATURE_ACCOUNTS: 10,  # Up to 10 connected accounts
@@ -70,6 +76,8 @@ SUBSCRIPTION_LIMITS: Dict[str, Dict[str, Any]] = {
         FEATURE_ADVANCED_ANALYTICS: True,
         FEATURE_EXPORT: True,
         FEATURE_TRANSFER_AUTHORIZATION: True,
+        FEATURE_CUSTOM_CATEGORIES: True,
+        FEATURE_CATEGORY_RULES: True,
     },
     TIER_ENTERPRISE: {
         FEATURE_ACCOUNTS: UNLIMITED,  # 20+ accounts, effectively unlimited
@@ -82,6 +90,8 @@ SUBSCRIPTION_LIMITS: Dict[str, Dict[str, Any]] = {
         FEATURE_ADVANCED_ANALYTICS: True,
         FEATURE_EXPORT: True,
         FEATURE_TRANSFER_AUTHORIZATION: True,
+        FEATURE_CUSTOM_CATEGORIES: True,
+        FEATURE_CATEGORY_RULES: True,
     },
 }
 
@@ -138,6 +148,8 @@ def is_boolean_feature(feature_type: str) -> bool:
         FEATURE_ADVANCED_ANALYTICS,
         FEATURE_EXPORT,
         FEATURE_TRANSFER_AUTHORIZATION,
+        FEATURE_CUSTOM_CATEGORIES,
+        FEATURE_CATEGORY_RULES,
     }
     return feature_type in boolean_features
 

@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Wallet,
   Settings,
   Calendar,
-  Tag, CreditCard, Bell, DollarSign, BookOpen, BarChart, Repeat, Lightbulb, Receipt, Target
+  Tag, CreditCard, Bell, DollarSign, BookOpen, BarChart, Lightbulb, Receipt, Target, Crown
 } from 'lucide-react'
 import { NavLink } from './NavLink'
 import { useUIStore } from '@/store/uiStore'
@@ -40,7 +40,6 @@ export function AppSidebar() {
             <NavLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
             <NavLink to="/accounts" icon={Wallet} label="Accounts" />
             <NavLink to="/transactions" icon={Receipt} label="Transactions" />
-            <NavLink to="/recurring-transactions" icon={Repeat} label="Recurring" />
             <NavLink to="/goals" icon={Target} label="Goals" />
             <NavLink to="/budgets" icon={DollarSign} label="Budgets" />
             <NavLink to="/bills" icon={Calendar} label="Bills" />
@@ -52,7 +51,7 @@ export function AppSidebar() {
 
           {/* Other Group */}
           <div className="space-y-1 pt-4">
-            <NavLink to="/subscription" icon={CreditCard} label="Subscription" />
+            <NavLink to="/subscription" icon={Crown} label="Subscription" />
             <NavLink to="/notifications" icon={Bell} label="Notifications" />
             <NavLink to="/settings" icon={Settings} label="Settings" />
             <NavLink to="/docs" icon={BookOpen} label="Documentation" />

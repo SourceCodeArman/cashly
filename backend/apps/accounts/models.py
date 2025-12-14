@@ -1,10 +1,10 @@
 """
 Account models for Cashly.
 """
+
 import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractUser
-from django.core.validators import MinLengthValidator
 from django.utils import timezone
 
 
@@ -12,13 +12,14 @@ class User(AbstractUser):
     """
     Custom User model extending Django's AbstractUser.
     """
+
     email = models.EmailField(unique=True, db_index=True)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
     preferences = models.JSONField(default=dict, blank=True)
     subscription_tier = models.CharField(
         max_length=20,
-        choices=[('free', 'Free'), ('premium', 'Premium'), ('pro', 'Pro')],
-        default='free'
+        choices=[("free", "Free"), ("premium", "Premium"), ("pro", "Pro")],
+        default="free",
     )
     stripe_customer_id = models.CharField(
         max_length=255,
@@ -26,90 +27,90 @@ class User(AbstractUser):
         null=True,
         blank=True,
         db_index=True,
-        help_text="Stripe customer ID"
+        help_text="Stripe customer ID",
     )
     subscription_status = models.CharField(
         max_length=50,
         null=True,
         blank=True,
-        help_text="Current subscription status (active, trialing, past_due, canceled, etc.)"
+        help_text="Current subscription status (active, trialing, past_due, canceled, etc.)",
     )
     subscription_end_date = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Date when subscription ends"
+        null=True, blank=True, help_text="Date when subscription ends"
     )
     mfa_enabled = models.BooleanField(default=False)
     mfa_secret = models.CharField(max_length=255, blank=True, null=True)
     mfa_backup_codes = models.JSONField(
         default=list,
         blank=True,
-        help_text="List of hashed backup codes for MFA recovery"
+        help_text="List of hashed backup codes for MFA recovery",
     )
     mfa_backup_codes_generated_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When backup codes were last generated"
+        null=True, blank=True, help_text="When backup codes were last generated"
     )
-    tour_done = models.BooleanField(default=False, help_text="Whether the user has completed the welcome tour")
+    tour_done = models.BooleanField(
+        default=False, help_text="Whether the user has completed the welcome tour"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username']
-    
+
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["username"]
+
     class Meta:
-        db_table = 'users'
-        verbose_name = 'User'
-        verbose_name_plural = 'Users'
-    
+        db_table = "users"
+        verbose_name = "User"
+        verbose_name_plural = "Users"
+
     def __str__(self):
         return self.email
 
     def has_active_subscription(self):
         """
         Check if user has an active subscription.
-        
+
         Prefers Subscription model over user.subscription_tier field.
-        
+
         Returns:
             True if user has an active subscription, False otherwise
         """
         try:
             from apps.subscriptions.services import is_subscription_active
+
             return is_subscription_active(self)
         except Exception:
             # Fallback to checking subscription_tier and dates
-            if self.subscription_tier in ['premium', 'pro']:
+            if self.subscription_tier in ["premium", "pro"]:
                 if self.subscription_end_date:
                     return timezone.now() < self.subscription_end_date
-                return self.subscription_status in ['active', 'trialing']
+                return self.subscription_status in ["active", "trialing"]
             return False
-    
+
     def get_subscription_tier(self):
         """
         Get user's subscription tier.
-        
+
         Prefers Subscription model over user.subscription_tier field.
-        
+
         Returns:
             Subscription tier: 'free', 'premium', or 'pro'
         """
         try:
             from apps.subscriptions.services import get_user_tier
+
             return get_user_tier(self)
         except Exception:
             # Fallback to subscription_tier field
-            return self.subscription_tier or 'free'
+            return self.subscription_tier or "free"
 
 
 class AccountQuerySet(models.QuerySet):
     """Custom queryset for Account model with chainable helpers."""
-    
+
     def for_user(self, user):
         """Return accounts for a specific user."""
         return self.filter(user=user)
-    
+
     def active(self):
         """Return only active accounts."""
         return self.filter(is_active=True)
@@ -117,14 +118,14 @@ class AccountQuerySet(models.QuerySet):
 
 class AccountManager(models.Manager):
     """Custom manager exposing queryset helpers."""
-    
+
     def get_queryset(self):
         return AccountQuerySet(self.model, using=self._db)
-    
+
     def for_user(self, user):
         """Return accounts for a specific user."""
         return self.get_queryset().for_user(user)
-    
+
     def active(self):
         """Return only active accounts."""
         return self.get_queryset().active()
@@ -134,21 +135,29 @@ class Account(models.Model):
     """
     Bank account model connected via Plaid.
     """
+
     ACCOUNT_TYPE_CHOICES = [
-        ('checking', 'Checking'),
-        ('savings', 'Savings'),
-        ('credit_card', 'Credit Card'),
-        ('investment', 'Investment'),
+        ("checking", "Checking"),
+        ("savings", "Savings"),
+        ("credit_card", "Credit Card"),
+        ("investment", "Investment"),
     ]
-    
+
     account_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='accounts')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="accounts")
     institution_name = models.CharField(max_length=200)
-    custom_name = models.CharField(max_length=200, blank=True, null=True, help_text="User-defined custom name for the account")
+    custom_name = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="User-defined custom name for the account",
+    )
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES)
-    account_number_masked = models.CharField(max_length=20, help_text="Last 4 digits for display")
+    account_number_masked = models.CharField(
+        max_length=20, help_text="Last 4 digits for display"
+    )
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
-    currency = models.CharField(max_length=3, default='USD')
+    currency = models.CharField(max_length=3, default="USD")
     plaid_account_id = models.CharField(max_length=255, unique=True, db_index=True)
     plaid_access_token = models.TextField(help_text="Encrypted Plaid access token")
     plaid_item_id = models.CharField(
@@ -156,53 +165,125 @@ class Account(models.Model):
         blank=True,
         null=True,
         db_index=True,
-        help_text="Plaid item identifier associated with the account"
+        help_text="Plaid item identifier associated with the account",
     )
     plaid_institution_id = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True,
-        help_text="Plaid institution identifier"
+        max_length=255, blank=True, null=True, help_text="Plaid institution identifier"
     )
     plaid_products = models.JSONField(
         default=list,
         blank=True,
-        help_text="List of Plaid products enabled for the item"
+        help_text="List of Plaid products enabled for the item",
     )
     webhook_url = models.URLField(
-        blank=True,
-        null=True,
-        help_text="Webhook configured for Plaid item events"
+        blank=True, null=True, help_text="Webhook configured for Plaid item events"
     )
     error_code = models.CharField(
         max_length=100,
         blank=True,
         null=True,
-        help_text="Last Plaid error code received for this account"
+        help_text="Last Plaid error code received for this account",
     )
     error_message = models.TextField(
         blank=True,
         null=True,
-        help_text="Last Plaid error message received for this account"
+        help_text="Last Plaid error message received for this account",
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
     last_error_at = models.DateTimeField(null=True, blank=True)
-    
+
+    # Plaid Liabilities API fields - Credit Card
+    plaid_apr = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Annual Percentage Rate from Plaid",
+    )
+    plaid_last_payment_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Last payment amount",
+    )
+    plaid_last_payment_date = models.DateField(
+        null=True, blank=True, help_text="Date of last payment"
+    )
+    plaid_minimum_payment_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Minimum payment amount due",
+    )
+    plaid_next_payment_due_date = models.DateField(
+        null=True, blank=True, help_text="Next payment due date"
+    )
+    plaid_credit_limit = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Credit limit for credit cards",
+    )
+
+    # Plaid Liabilities API fields - Loans (mortgage, student, auto, personal)
+    plaid_loan_type = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Type of loan (conventional, fha, student, auto, personal, etc.)",
+    )
+    plaid_interest_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Interest rate for loans",
+    )
+    plaid_loan_term = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Loan term (e.g., '30 year', '15 year')",
+    )
+    plaid_origination_date = models.DateField(
+        null=True, blank=True, help_text="Date loan was originated"
+    )
+    plaid_maturity_date = models.DateField(
+        null=True, blank=True, help_text="Date loan matures/ends"
+    )
+    plaid_payment_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Regular payment amount for loans",
+    )
+
+    # Liability data metadata
+    plaid_liabilities_last_updated = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last time liability data was fetched from Plaid",
+    )
+
     objects = AccountManager()
-    
+
     class Meta:
-        db_table = 'accounts'
-        verbose_name = 'Account'
-        verbose_name_plural = 'Accounts'
+        db_table = "accounts"
+        verbose_name = "Account"
+        verbose_name_plural = "Accounts"
         indexes = [
-            models.Index(fields=['user', 'is_active']),
-            models.Index(fields=['plaid_account_id']),
-            models.Index(fields=['plaid_item_id']),
+            models.Index(fields=["user", "is_active"]),
+            models.Index(fields=["plaid_account_id"]),
+            models.Index(fields=["plaid_item_id"]),
         ]
-    
+
     def __str__(self):
         return f"{self.institution_name} - {self.account_type} ({self.account_number_masked})"
 
@@ -220,10 +301,12 @@ class PlaidWebhookEvent(models.Model):
     received_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'plaid_webhook_events'
-        ordering = ['-received_at']
+        db_table = "plaid_webhook_events"
+        ordering = ["-received_at"]
         indexes = [
-            models.Index(fields=['item_id', 'webhook_type', 'webhook_code', 'received_at']),
+            models.Index(
+                fields=["item_id", "webhook_type", "webhook_code", "received_at"]
+            ),
         ]
 
     def __str__(self):
@@ -234,21 +317,24 @@ class EmailChangeRequest(models.Model):
     """
     Model to store pending email change requests.
     """
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='email_change_requests')
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="email_change_requests"
+    )
     new_email = models.EmailField()
     token = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
-    
+
     class Meta:
-        db_table = 'email_change_requests'
+        db_table = "email_change_requests"
         indexes = [
-            models.Index(fields=['token']),
-            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=["token"]),
+            models.Index(fields=["user", "created_at"]),
         ]
-    
+
     def __str__(self):
         return f"Email change for {self.user.username} to {self.new_email}"
-    
+
     def is_expired(self):
         return timezone.now() > self.expires_at

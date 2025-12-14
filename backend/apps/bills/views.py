@@ -153,6 +153,21 @@ class BillViewSet(viewsets.ModelViewSet):
     
     def list(self, request, *args, **kwargs):
         """List bills."""
+        from django.core.cache import cache
+        
+        user = request.user
+        # Include query params in cache key to handle filtering
+        is_active = request.query_params.get('is_active', 'any')
+        cache_key = f'bills_list_user_{user.id}_active_{is_active}'
+        
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response({
+                'status': 'success',
+                'data': cached_data,
+                'message': 'Bills retrieved successfully'
+            }, status=status.HTTP_200_OK)
+        
         response = super().list(request, *args, **kwargs)
         
         # Add computed fields
@@ -168,6 +183,9 @@ class BillViewSet(viewsets.ModelViewSet):
                         bill_data['is_overdue'] = bill.is_overdue
                     except Bill.DoesNotExist:
                         pass
+        
+        # Cache for 60 seconds
+        cache.set(cache_key, bills_data, 60)
         
         return Response({
             'status': 'success',
@@ -265,6 +283,46 @@ class BillViewSet(viewsets.ModelViewSet):
             'data': bills_data,
             'message': f'Upcoming bills for next {days} days retrieved successfully'
         }, status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Get insight summary counts."""
+        from django.core.cache import cache
+        
+        user = request.user
+        cache_key = f'insights_summary_user_{user.id}'
+        
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+        
+        queryset = Insight.objects.filter(
+            user=request.user,
+            is_dismissed=False
+        )
+        
+        total = queryset.count()
+        unread = queryset.filter(is_read=False).count()
+        by_priority = {
+            'high': queryset.filter(priority='high').count(),
+            'medium': queryset.filter(priority='medium').count(),
+            'low': queryset.filter(priority='low').count()
+        }
+        by_type = {}
+        for insight_type in queryset.values_list('insight_type', flat=True).distinct():
+            by_type[insight_type] = queryset.filter(insight_type=insight_type).count()
+        
+        response_data = {
+            'total': total,
+            'unread': unread,
+            'by_priority': by_priority,
+            'by_type': by_type
+        }
+        
+        # Cache for 120 seconds
+        cache.set(cache_key, response_data, 120)
+        
+        return Response(response_data)
     
     @action(detail=False, methods=['get'], url_path='overdue')
     def overdue(self, request):

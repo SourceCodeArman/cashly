@@ -48,6 +48,14 @@ export interface Transaction {
 }
 
 // Category types
+export interface CategoryRule {
+  id?: string
+  field: 'merchant_name' | 'description' | 'amount'
+  operator: 'contains' | 'equals' | 'starts_with' | 'ends_with' | 'greater_than' | 'less_than'
+  value: string
+  enabled?: boolean
+}
+
 export interface Category {
   id: string
   name: string
@@ -58,6 +66,8 @@ export interface Category {
   parentCategoryName?: string
   parent_category?: Category | null
   subcategories?: Category[]
+  rules?: CategoryRule[]
+  rulesCombination?: 'AND' | 'OR'
   createdAt?: string
   updatedAt?: string
 }

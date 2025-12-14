@@ -11,41 +11,41 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         # Expense categories
         expense_categories = [
-            {'name': 'Food & Dining', 'type': 'expense', 'icon': 'restaurant', 'color': '#FF6B6B'},
-            {'name': 'Shopping', 'type': 'expense', 'icon': 'shopping', 'color': '#4ECDC4'},
+            {'name': 'Food & Dining', 'type': 'expense', 'icon': 'utensils', 'color': '#FF6B6B'},
+            {'name': 'Shopping', 'type': 'expense', 'icon': 'shopping-cart', 'color': '#4ECDC4'},
             {'name': 'Transportation', 'type': 'expense', 'icon': 'car', 'color': '#45B7D1'},
-            {'name': 'Bills & Utilities', 'type': 'expense', 'icon': 'bill', 'color': '#FFA07A'},
-            {'name': 'Entertainment', 'type': 'expense', 'icon': 'entertainment', 'color': '#98D8C8'},
-            {'name': 'Healthcare', 'type': 'expense', 'icon': 'health', 'color': '#F7DC6F'},
-            {'name': 'Education', 'type': 'expense', 'icon': 'education', 'color': '#BB8FCE'},
-            {'name': 'Personal Care', 'type': 'expense', 'icon': 'personal', 'color': '#85C1E2'},
-            {'name': 'Travel', 'type': 'expense', 'icon': 'travel', 'color': '#F8B739'},
-            {'name': 'Gas & Fuel', 'type': 'expense', 'icon': 'gas', 'color': '#E74C3C'},
-            {'name': 'Groceries', 'type': 'expense', 'icon': 'grocery', 'color': '#2ECC71'},
+            {'name': 'Bills & Utilities', 'type': 'expense', 'icon': 'zap', 'color': '#FFA07A'},
+            {'name': 'Entertainment', 'type': 'expense', 'icon': 'film', 'color': '#98D8C8'},
+            {'name': 'Healthcare', 'type': 'expense', 'icon': 'heart', 'color': '#F7DC6F'},
+            {'name': 'Education', 'type': 'expense', 'icon': 'book', 'color': '#BB8FCE'},
+            {'name': 'Personal Care', 'type': 'expense', 'icon': 'user', 'color': '#85C1E2'},
+            {'name': 'Travel', 'type': 'expense', 'icon': 'plane', 'color': '#F8B739'},
+            {'name': 'Gas & Fuel', 'type': 'expense', 'icon': 'car', 'color': '#E74C3C'},
+            {'name': 'Groceries', 'type': 'expense', 'icon': 'shopping-cart', 'color': '#2ECC71'},
             {'name': 'Home & Garden', 'type': 'expense', 'icon': 'home', 'color': '#9B59B6'},
-            {'name': 'Subscriptions', 'type': 'expense', 'icon': 'subscription', 'color': '#3498DB'},
-            {'name': 'Insurance', 'type': 'expense', 'icon': 'insurance', 'color': '#E67E22'},
-            {'name': 'Taxes', 'type': 'expense', 'icon': 'tax', 'color': '#C0392B'},
-            {'name': 'Other Expenses', 'type': 'expense', 'icon': 'other', 'color': '#95A5A6'},
+            {'name': 'Subscriptions', 'type': 'expense', 'icon': 'credit-card', 'color': '#3498DB'},
+            {'name': 'Insurance', 'type': 'expense', 'icon': 'shield', 'color': '#E67E22'},
+            {'name': 'Taxes', 'type': 'expense', 'icon': 'dollar-sign', 'color': '#C0392B'},
+            {'name': 'Other Expenses', 'type': 'expense', 'icon': 'sparkles', 'color': '#95A5A6'},
         ]
 
         # Income categories
         income_categories = [
-            {'name': 'Salary', 'type': 'income', 'icon': 'salary', 'color': '#27AE60'},
-            {'name': 'Freelance', 'type': 'income', 'icon': 'freelance', 'color': '#16A085'},
-            {'name': 'Investment', 'type': 'income', 'icon': 'investment', 'color': '#2980B9'},
-            {'name': 'Rental Income', 'type': 'income', 'icon': 'rental', 'color': '#8E44AD'},
-            {'name': 'Business Income', 'type': 'income', 'icon': 'business', 'color': '#D35400'},
+            {'name': 'Salary', 'type': 'income', 'icon': 'briefcase', 'color': '#27AE60'},
+            {'name': 'Freelance', 'type': 'income', 'icon': 'laptop', 'color': '#16A085'},
+            {'name': 'Investment', 'type': 'income', 'icon': 'trending-up', 'color': '#2980B9'},
+            {'name': 'Rental Income', 'type': 'income', 'icon': 'home', 'color': '#8E44AD'},
+            {'name': 'Business Income', 'type': 'income', 'icon': 'briefcase', 'color': '#D35400'},
             {'name': 'Gift', 'type': 'income', 'icon': 'gift', 'color': '#E91E63'},
-            {'name': 'Refund', 'type': 'income', 'icon': 'refund', 'color': '#00BCD4'},
-            {'name': 'Bonus', 'type': 'income', 'icon': 'bonus', 'color': '#FF9800'},
-            {'name': 'Interest', 'type': 'income', 'icon': 'interest', 'color': '#4CAF50'},
-            {'name': 'Other Income', 'type': 'income', 'icon': 'other', 'color': '#607D8B'},
+            {'name': 'Refund', 'type': 'income', 'icon': 'credit-card', 'color': '#00BCD4'},
+            {'name': 'Bonus', 'type': 'income', 'icon': 'star', 'color': '#FF9800'},
+            {'name': 'Interest', 'type': 'income', 'icon': 'trending-up', 'color': '#4CAF50'},
+            {'name': 'Other Income', 'type': 'income', 'icon': 'dollar-sign', 'color': '#607D8B'},
         ]
 
         # Transfer category
         transfer_categories = [
-            {'name': 'Transfer', 'type': 'transfer', 'icon': 'transfer', 'color': '#9E9E9E'},
+            {'name': 'Transfer', 'type': 'transfer', 'icon': 'arrow-right-left', 'color': '#9E9E9E'},
         ]
 
         created_count = 0

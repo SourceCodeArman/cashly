@@ -11,7 +11,9 @@ import {
     CreditCard,
     ChevronRight,
     BookOpen,
-    Menu
+    Menu,
+    Calendar,
+    Repeat
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -279,6 +281,82 @@ export function Documentation() {
                                 <p className="text-sm text-muted-foreground">Receive notifications when you approach or exceed your budget limits.</p>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )
+        },
+        {
+            id: 'bills',
+            title: 'Bills & Recurring',
+            icon: Calendar,
+            content: (
+                <div className="space-y-6">
+                    <div>
+                        <h3 className="text-2xl font-bold mb-4">Bills & Recurring Payments</h3>
+                        <p className="text-muted-foreground mb-6">
+                            Manage both manually-added bills/subscriptions and auto-detected recurring transactions in one unified interface.
+                        </p>
+                    </div>
+
+                    <div className="grid gap-6">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Calendar className="h-5 w-5 text-primary" />
+                                    Manual Bills Tab
+                                </CardTitle>
+                                <CardDescription>
+                                    Track and manage your subscription payments and recurring bills
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-sm text-muted-foreground">
+                                    Add bills you pay regularly such as rent, utilities, streaming services, and insurance.
+                                </p>
+                                <div className="space-y-2">
+                                    <h4 className="font-semibold text-sm">Features:</h4>
+                                    <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
+                                        <li>Track bill due dates and payment status</li>
+                                        <li>View upcoming bills in the next 7 days</li>
+                                        <li>Filter by active, all, or overdue bills</li>
+                                        <li>Calculate total monthly bill obligations</li>
+                                        <li>Support for various frequencies (weekly, monthly, yearly)</li>
+                                    </ul>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Repeat className="h-5 w-5 text-primary" />
+                                    Detected Recurring Tab
+                                </CardTitle>
+                                <CardDescription>
+                                    Automatically identify recurring transactions from your history
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-sm text-muted-foreground">
+                                    Cashly analyzes your transaction history to automatically detect patterns and identify recurring payments.
+                                </p>
+                                <div className="space-y-2">
+                                    <h4 className="font-semibold text-sm">How It Works:</h4>
+                                    <ol className="list-decimal list-inside text-sm space-y-1 text-muted-foreground">
+                                        <li>Click <strong>"Run Detection"</strong> to scan your transactions</li>
+                                        <li>Review detected recurring groups organized by merchant</li>
+                                        <li>See transaction count, average amount, and frequency</li>
+                                        <li>Mark false positives as non-recurring if needed</li>
+                                    </ol>
+                                </div>
+                                <div className="bg-muted p-4 rounded-lg">
+                                    <p className="text-sm font-medium">Detection Algorithm:</p>
+                                    <p className="text-sm text-muted-foreground mt-1">
+                                        The system looks for transactions with similar merchant names, amounts, and regular time intervals to identify subscriptions and recurring expenses you might have missed.
+                                    </p>
+                                </div>
+                            </CardContent>
+                        </Card>
                     </div>
                 </div>
             )

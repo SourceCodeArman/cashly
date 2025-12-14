@@ -2,25 +2,33 @@ export interface DebtAccount {
     debt_id: string;
     name: string;
     debt_type: DebtType;
-    current_balance: string;
-    original_balance: string;
-    interest_rate: string;
-    minimum_payment: string;
-    due_day: number;
+    current_balance: string | number;
+    original_balance?: string;
+    interest_rate: string | number;
+    minimum_payment: string | number;
+    due_day?: number;
     creditor_name?: string;
     account_number_masked?: string;
     status: DebtStatus;
     opened_date?: string;
     target_payoff_date?: string;
     last_payment_date?: string;
-    last_payment_amount?: string;
+    last_payment_amount?: string | number;
     notes?: string;
-    is_active: boolean;
-    monthly_interest: string;
-    days_until_due: number;
+    is_active?: boolean;
+    monthly_interest?: string;
+    days_until_due?: number;
     next_due_date?: string;
-    created_at: string;
-    updated_at: string;
+    created_at?: string;
+    updated_at?: string;
+
+    // Plaid liability fields (for synced accounts)
+    is_synced?: boolean; // Flag to indicate if from Plaid or manual
+    credit_limit?: number; // For credit cards
+    loan_type?: string; // Type of loan (conventional, fha, student, auto, etc.)
+    loan_term?: string; // Loan term (e.g., '30 year', '15 year')
+    origination_date?: string; // Date loan was originated
+    maturity_date?: string; // Date loan matures/ends
 }
 
 export type DebtType =

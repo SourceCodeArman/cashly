@@ -124,10 +124,27 @@ class UnreadCountView(APIView):
     
     def get(self, request):
         """Return unread notification count."""
+        from django.core.cache import cache
+        
+        user = request.user
+        cache_key = f'unread_notif_count_user_{user.id}'
+        
+        # Try to get cached count
+        cached_count = cache.get(cache_key)
+        if cached_count is not None:
+            return Response({
+                'status': 'success',
+                'data': {'count': cached_count},
+                'message': 'Unread count retrieved successfully'
+            })
+        
         count = Notification.objects.filter(
             user=request.user,
             is_read=False
         ).count()
+        
+        # Cache for 30 seconds (notifications change frequently)
+        cache.set(cache_key, count, 30)
         
         return Response({
             'status': 'success',

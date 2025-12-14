@@ -8,7 +8,7 @@ import { AreaChartIcon, LineChartIcon, BarChartIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface SpendingTrendWidgetProps {
-    data: { date: string; amount: string }[]
+    data: { month: string; amount: string | number }[]
     className?: string
 }
 
@@ -39,8 +39,8 @@ export function SpendingTrendWidget({ data, className }: SpendingTrendWidgetProp
     const [chartType, setChartType] = useState<ChartType>('area')
 
     const chartData = data.map((item) => ({
-        date: new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        amount: parseFloat(item.amount),
+        date: new Date(item.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        amount: typeof item.amount === 'string' ? parseFloat(item.amount) : item.amount,
     }))
 
     const renderChart = () => {

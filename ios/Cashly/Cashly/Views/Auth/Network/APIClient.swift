@@ -110,8 +110,6 @@ actor APIClient {
                 do {
                     return try decoder.decode(T.self, from: data)
                 } catch {
-                    print("Decoding error: \(error)")
-                    print("Response data: \(String(data: data, encoding: .utf8) ?? "nil")")
                     throw APIError.decodingError(error)
                 }
                 
@@ -119,7 +117,7 @@ actor APIClient {
                 // Unauthorized - try to refresh token
                 if requiresAuth {
                     // TODO: Implement token refresh logic
-                    KeychainManager.shared.clearTokens()
+                    await KeychainManager.shared.clearTokens()
                 }
                 throw APIError.unauthorized
                 

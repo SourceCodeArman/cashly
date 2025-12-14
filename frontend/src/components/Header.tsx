@@ -94,7 +94,7 @@ export function Header({ variant = 'default' }: HeaderProps = {}) {
       "sticky top-0 z-40 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60",
       isAdmin ? "" : "sticky top-0 z-30"
     )}>
-      <div className="mx-auto max-w-7xl flex h-16 items-center justify-between px-4">
+      <div className="mx-auto max-w-full flex h-16 items-center justify-between px-4">
         {/* Left Section */}
         {isAdmin ? (
           <div className="flex items-center gap-3">

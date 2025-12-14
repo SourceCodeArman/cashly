@@ -71,5 +71,30 @@ export const categoryService = {
     const response = await apiClient.delete<ApiResponse<null>>(`/transactions/categories/${id}/`)
     return response.data
   },
+
+  async updateCategoryRules(
+    id: string,
+    rules: import('@/types').CategoryRule[],
+    combination?: 'AND' | 'OR'
+  ): Promise<ApiResponse<Category>> {
+    const response = await apiClient.patch<ApiResponse<Category>>(
+      `/transactions/categories/${id}/rules/`,
+      { rules, rules_combination: combination || 'OR' }
+    )
+    if (response.data.status === 'success' && response.data.data) {
+      response.data.data = normalizeCategory(response.data.data as unknown as RawCategoryData)
+    }
+    return response.data
+  },
+
+  async applyCategoryRules(id: string, overwrite = false): Promise<ApiResponse<{ updated_count: number; category_id: string; category_name: string }>> {
+    const params = overwrite ? { overwrite: 'true' } : {}
+    const response = await apiClient.post<ApiResponse<{ updated_count: number; category_id: string; category_name: string }>>(
+      `/transactions/categories/${id}/apply-rules/`,
+      {},
+      { params }
+    )
+    return response.data
+  },
 }
 

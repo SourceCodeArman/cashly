@@ -74,6 +74,10 @@ const TabsContent = React.forwardRef<
       ref={ref}
       className={cn(
         "mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        // Prevent vertical animations - only horizontal sliding
+        "overflow-hidden",
+        // Absolutely position inactive tabs to prevent layout shifts
+        "data-[state=inactive]:absolute data-[state=inactive]:top-0 data-[state=inactive]:left-0 data-[state=inactive]:right-0",
         // Apply slide-out animation when tab becomes inactive
         animations.inactive,
         // Disable pointer events on inactive tabs during animation
