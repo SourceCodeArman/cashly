@@ -29,15 +29,31 @@ ipconfig getifaddr en0
 
 ```
 Cashly/
-├── App/              # App entry point
-├── Core/             # Core utilities (networking, storage)
-├── Models/           # Data models
-├── Services/         # Business logic
-├── ViewModels/       # MVVM view models
-├── Views/            # SwiftUI views
-├── Components/       # Reusable UI components
-└── Resources/        # Assets, fonts, etc.
+├── App/              # App entry point and delegation
+├── Core/             # Core utilities, networking, and extensions
+├── Models/           # Data models (Codable structs)
+├── Services/         # Business logic and API interaction
+├── ViewModels/       # MVVM view models handling state
+├── Views/            # SwiftUI views broken down by feature
+├── Components/       # Reusable UI components (Buttons, Cards)
+└── Resources/        # Assets, Colors, Fonts
 ```
+
+## Architecture
+
+The app follows the **MVVM (Model-View-ViewModel)** architectural pattern:
+
+-   **View**: SwiftUI Views that observe ViewModels.
+-   **ViewModel**: `ObservableObject` classes that hold state (`@Published`) and handle business logic.
+-   **Model**: Simple data structures.
+-   **Service**: Singleton classes responsible for networking and data persistence.
+
+## Testing
+
+Unit tests are located in the `CashlyTests` target.
+
+1. Select the `Cashly` scheme.
+2. Press `Cmd + U` to run tests.
 
 ## Build Configurations
 

@@ -1,73 +1,74 @@
-# React + TypeScript + Vite
+# Cashly Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The frontend for Cashly is a modern single-page application built with React 19, TypeScript, and Vite. It features a responsive design with Tailwind CSS and manages state using Zustand and React Query.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+-   **Framework**: React 19
+-   **Build Tool**: Vite
+-   **Language**: TypeScript
+-   **Styling**: Tailwind CSS, PostCSS
+-   **State Management**: Zustand (Client state), React Query (Server state)
+-   **Routing**: React Router
+-   **UI Components**: Headless UI, Heroicons, Framer Motion
 
-## React Compiler
+## Prerequisites
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+-   Node.js 18+
+-   npm
 
-## Expanding the ESLint configuration
+## Setup
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 1. Installation
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cd frontend
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 2. Environment Variables
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Create a `.env` file in the `frontend` directory:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+VITE_API_BASE_URL=http://localhost:8000/api/v1
+VITE_STRIPE_PUBLISHABLE_KEY=your_stripe_key_here
 ```
+
+### 3. Development Server
+
+```bash
+npm run dev
+```
+
+The app will be available at `http://localhost:5173`.
+
+### 4. Building for Production
+
+```bash
+npm run build
+```
+
+Previews the production build:
+
+```bash
+npm run preview
+```
+
+## Project Structure
+
+-   `src/components/`: Reusable UI components (Buttons, Inputs, etc.)
+-   `src/pages/`: Page-level components corresponding to routes
+-   `src/services/`: API client and service functions
+-   `src/hooks/`: Custom React hooks
+-   `src/store/`: Zustand stores for global state
+-   `src/types/`: TypeScript interfaces and types
+-   `src/utils/`: Helper functions
+
+## Key Features
+
+-   **Authentication**: Login, Registration, Password Reset
+-   **Dashboard**: Real-time spending overview and charts
+-   **Transactions**: Filtering, sorting, and categorization
+-   **Subscriptions**: Stripe integration for managing plans
+-   **Responsive Design**: Mobile-first approach

@@ -15,6 +15,13 @@ A personal finance management application built with Django and React, featuring
 - **Account Transfers**: Transfer funds between connected accounts
 - **Settings**: User profile and subscription management
 
+### Quick Links
+
+-   [Backend Documentation & Setup](backend/README.md)
+-   [Frontend Documentation & Setup](frontend/README.md)
+-   [iOS Documentation & Setup](ios/README.md)
+-   [Docker Setup](backend/README.docker.md)
+
 ## Tech Stack
 
 - **Backend**: Django 5.0, Django REST Framework
@@ -27,118 +34,35 @@ A personal finance management application built with Django and React, featuring
 - **Documentation**: Swagger/OpenAPI (drf-yasg)
 - **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, React Query, Zustand
 
-## Setup
+## Quick Start
 
-### Prerequisites
+### Backend
 
-- Python 3.11+
-- Supabase account (for database) or PostgreSQL (local development)
-- Redis (for Celery task queue)
-- Docker (optional)
+1.  Navigate to `backend/`
+2.  Set up venv and install requirements: `pip install -r requirements.txt`
+3.  Configure `.env`
+4.  Run migrations: `python manage.py migrate`
+5.  Start server: `python manage.py runserver`
 
-### Installation
+*See [backend/README.md](backend/README.md) for full details.*
 
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd cashly
-```
+### Frontend
 
-2. Navigate to backend directory:
-```bash
-cd backend
-```
+1.  Navigate to `frontend/`
+2.  Install dependencies: `npm install`
+3.  Configure `.env`
+4.  Start dev server: `npm run dev`
 
-3. Create and activate virtual environment:
-```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+*See [frontend/README.md](frontend/README.md) for full details.*
 
-4. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+### iOS
 
-5. Set up environment variables:
-Create a `.env` file in the `backend/` directory with your configuration (see Environment Variables section below).
+1.  Open `ios/Cashly.xcodeproj` in Xcode
+2.  Run on Simulator
 
-6. Set up Supabase database:
-   - Create a new project at [Supabase](https://supabase.com)
-   - Go to Project Settings → Database
-   - Copy the connection string (URI) from the "Connection string" section
-   - Add it to your `.env` file as `DATABASE_URL`
-   
-   Or use individual database parameters:
-   ```env
-   DB_NAME=postgres
-   DB_USER=postgres
-   DB_PASSWORD=your_supabase_password
-   DB_HOST=db.your-project-ref.supabase.co
-   DB_PORT=5432
-   DB_SSLMODE=require
-   ```
+*See [ios/README.md](ios/README.md) for full details.*
 
-7. Run database migrations:
-```bash
-python manage.py migrate
-python manage.py seed_categories
-python manage.py createsuperuser
-```
-
-8. Run development server:
-```bash
-python manage.py runserver
-```
-
-### Frontend Setup
-
-1. Navigate to frontend directory:
-```bash
-cd frontend
-```
-
-2. Install dependencies:
-```bash
-npm install
-```
-
-3. Set up environment variables:
-Create a `.env` file in the `frontend/` directory:
-```env
-VITE_API_BASE_URL=http://localhost:8000/api/v1
-VITE_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
-```
-
-4. Run development server:
-```bash
-npm run dev
-```
-
-The frontend will be available at `http://localhost:5173` (or the port Vite assigns).
-
-### Stripe Setup
-
-1. Create a Stripe account at [https://stripe.com](https://stripe.com)
-2. Get your API keys from the Stripe Dashboard → Developers → API keys
-3. Create products and prices in Stripe Dashboard:
-   - Premium Monthly & Annual
-   - Pro Monthly & Annual
-4. Copy the Price IDs and add them to your `backend/.env` file
-5. Run the management command to sync products (optional helper that prints the IDs for you):
-```bash
-cd backend
-python manage.py create_stripe_products
-```
-6. Set up webhooks in Stripe Dashboard **or** use the Stripe CLI during development:
-   - Endpoint URL: `https://your-domain.com/api/v1/subscriptions/webhooks/` (production)
-   - Local testing: `stripe listen --forward-to localhost:8000/api/v1/subscriptions/webhooks/`
-   - Events: `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.payment_succeeded`, `invoice.payment_failed`, `customer.subscription.trial_will_end`
-7. Copy the webhook signing secret to your `backend/.env` file (`STRIPE_WEBHOOK_SECRET`). The Stripe CLI prints a secret each time you run `stripe listen`.
-8. Add your **publishable** key to `frontend/.env` as `VITE_STRIPE_PUBLISHABLE_KEY` so the upgrade dialog can render Stripe Elements.
-9. Use Stripe test cards (e.g., `4242 4242 4242 4242`) to walk through the entire subscription upgrade/cancellation flow in the app.
-
-### Docker Setup
+### Docker
 
 ```bash
 cd backend
