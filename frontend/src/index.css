@@ -1,88 +1,116 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Light Mode Colors */
-    --background: 210 20% 98%;
-    --foreground: 215 25% 15%;
-    --card: 0 0% 100%;
-    --card-foreground: 215 25% 15%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 15%;
-    --primary: 195 85% 40%;
+    /* Light Mode Colors - Cashly Warm Theme */
+    --background: 48 20% 98%;
+    /* #FDFCF8 */
+    --foreground: 0 0% 10%;
+    /* #1A1A1A */
+
+    --card: 48 20% 98%;
+    /* #FDFCF8 */
+    --card-foreground: 0 0% 10%;
+
+    --popover: 48 20% 98%;
+    --popover-foreground: 0 0% 10%;
+
+    --primary: 0 0% 10%;
+    /* #1A1A1A */
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 15% 96%;
-    --secondary-foreground: 215 25% 15%;
-    --muted: 210 15% 96%;
-    --muted-foreground: 215 15% 50%;
-    --accent: 160 70% 45%;
-    --accent-foreground: 0 0% 100%;
-    --success: 160 70% 45%;
-    --success-foreground: 0 0% 100%;
-    --warning: 35 90% 55%;
-    --warning-foreground: 0 0% 100%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 215 20% 88%;
-    --input: 215 20% 88%;
-    --ring: 195 85% 40%;
+
+    --secondary: 48 20% 96%;
+    --secondary-foreground: 0 0% 10%;
+
+    --muted: 48 20% 96%;
+    --muted-foreground: 0 0% 40%;
+
+    --accent: 100 20% 96%;
+    /* Subtle accent, maybe #E3E8D3 or similar */
+    --accent-foreground: 0 0% 10%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 48 10% 90%;
+    /* Subtle warm border */
+    --input: 48 10% 90%;
+    --ring: 0 0% 10%;
+
     --radius: 0.75rem;
 
-    /* Sidebar Colors (Dark accent color) */
-    --sidebar-background: 215 25% 18%;
-    --sidebar-foreground: 210 20% 96%;
-    --sidebar-primary: 195 85% 50%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 215 25% 18%;
-    --sidebar-accent-foreground: 210 20% 98%;
-    --sidebar-border: 215 25% 20%;
-    --sidebar-ring: 195 85% 50%;
+    /* Sidebar Colors - Matching the existing cool dark sidebar usually, but let's check if we want to change this. 
+       The Landing page doesn't have a sidebar. The auth page has a dark right column.
+       Let's keep Sidebar dark to match the "Brand" column style if possible, or make it light?
+       The Dashboard usually has a sidebar. 
+       Let's update Sidebar to match the Dark Brand Column (#1A1A1A).
+    */
+    --sidebar-background: 0 0% 10%;
+    --sidebar-foreground: 60 10% 96%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 0 0% 10%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 60 10% 96%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 0 0% 80%;
   }
 
   .dark {
-    --background: 215 30% 10%;
-    --foreground: 210 20% 95%;
-    --card: 215 28% 14%;
-    --card-foreground: 210 20% 95%;
-    --popover: 215 28% 14%;
-    --popover-foreground: 210 20% 95%;
-    --primary: 195 85% 50%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 215 25% 18%;
-    --secondary-foreground: 210 20% 95%;
-    --muted: 215 25% 18%;
-    --muted-foreground: 215 15% 60%;
-    --accent: 160 70% 50%;
-    --accent-foreground: 0 0% 100%;
-    --success: 160 70% 50%;
-    --success-foreground: 0 0% 100%;
-    --warning: 35 90% 55%;
-    --warning-foreground: 0 0% 100%;
-    --destructive: 0 72% 55%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 215 25% 22%;
-    --input: 215 25% 22%;
-    --ring: 195 85% 50%;
+    /* Dark Mode Colors - Warm Theme */
+    --background: 0 0% 10%;
+    /* #1A1A1A */
+    --foreground: 48 20% 98%;
+    /* #FDFCF8 */
 
-    /* Sidebar (Same as card background in dark mode) */
-    --sidebar-background: 215 28% 14%;
-    --sidebar-foreground: 210 20% 95%;
-    --sidebar-primary: 195 85% 50%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 215 25% 18%;
-    --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 215 25% 22%;
-    --sidebar-ring: 195 85% 50%;
+    --card: 0 0% 13%;
+    /* Slightly lighter for contrast */
+    --card-foreground: 48 20% 98%;
+
+    --popover: 0 0% 13%;
+    --popover-foreground: 48 20% 98%;
+
+    --primary: 48 20% 98%;
+    /* Cream for primary actions in dark mode */
+    --primary-foreground: 0 0% 10%;
+
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 48 20% 98%;
+
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 60%;
+
+    --accent: 0 0% 15%;
+    --accent-foreground: 48 20% 98%;
+
+    --destructive: 0 60% 50%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 48 20% 98%;
+
+    /* Sidebar - match background or blend */
+    --sidebar-background: 0 0% 10%;
+    --sidebar-foreground: 60 10% 96%;
+    --sidebar-primary: 48 20% 98%;
+    --sidebar-primary-foreground: 0 0% 10%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 48 20% 98%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 48 20% 98%;
   }
 }
 
 @layer base {
   * {
     @apply border-border;
+  }
+
+  /* Force serif font for bold/semibold text per user request, but allow opting out with font-sans */
+  :not(.font-sans):is(.font-bold, .font-semibold, strong, b) {
+    font-family: 'Playfair Display', serif;
   }
 
   html,

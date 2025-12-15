@@ -42,7 +42,7 @@ export function NetWorthWidget({ className }: NetWorthWidgetProps) {
             </CardHeader>
             <CardContent>
                 <div className="flex items-center gap-2 mb-2">
-                    <div className="text-2xl font-bold">
+                    <div className="text-2xl font-serif font-bold ">
                         ${Math.abs(netWorth).toLocaleString(undefined, {
                             minimumFractionDigits: 2,
                             maximumFractionDigits: 2

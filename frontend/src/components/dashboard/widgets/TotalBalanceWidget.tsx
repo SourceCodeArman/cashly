@@ -14,7 +14,7 @@ export function TotalBalanceWidget({ amount }: TotalBalanceWidgetProps) {
                 <Wallet className="h-5 w-5 text-primary" />
             </CardHeader>
             <CardContent className="flex-1 flex items-center">
-                <div className="text-2xl font-bold text-foreground">
+                <div className="text-2xl font-serif font-bold text-foreground">
                     {formatCurrency(parseFloat(amount))}
                 </div>
             </CardContent>

@@ -94,8 +94,8 @@ export function Dashboard() {
       {/* Page Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-3xl md:text-4xl font-serif font-bold italic tracking-tight text-[#1A1A1A]">Dashboard</h1>
+          <p className="text-[#1A1A1A]/60">
             Overview of your financial status and spending patterns
           </p>
         </div>

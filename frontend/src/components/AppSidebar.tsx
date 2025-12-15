@@ -7,6 +7,7 @@ import {
 import { NavLink } from './NavLink'
 import { useUIStore } from '@/store/uiStore'
 import { cn } from '@/lib/utils'
+import { Logo } from './Logo'
 
 export function AppSidebar() {
   const { sidebarOpen } = useUIStore()
@@ -22,15 +23,9 @@ export function AppSidebar() {
         {/* Logo Header */}
         <div className={cn(
           "flex h-16 items-center border-b border-sidebar-border transition-colors duration-500 ease-in-out",
-          sidebarOpen ? "p-4 px-[8px]" : "px-[8px] py-4"
+          sidebarOpen ? "p-4 px-[8px]" : "px-[8px] py-4 justify-center"
         )}>
-          <img src="/logo.svg" alt="Cashly Logo" className="h-10 w-10 shrink-0" />
-          <h1 className={cn(
-            "ml-3 text-lg font-semibold text-sidebar-foreground whitespace-nowrap overflow-hidden transition-[opacity,max-width] ease-in-out",
-            sidebarOpen ? "opacity-100 max-w-[200px] duration-500 delay-0" : "opacity-0 max-w-0 w-0 duration-700 delay-300"
-          )}>
-            Cashly
-          </h1>
+          <Logo variant="light" showText={sidebarOpen} className={cn("transition-all duration-300", sidebarOpen ? "scale-90 origin-left" : "scale-75")} />
         </div>
 
         {/* Navigation */}

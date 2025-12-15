@@ -28,7 +28,7 @@ export function Logo({ className, showText = true, variant = 'dark' }: LogoProps
     return (
         <div className={cn("flex items-center", className)}>
             <span
-                className="font-serif font-semibold text-3xl tracking-tight select-none italic"
+                className="font-serif font-bold text-3xl tracking-tight select-none italic"
                 style={{ color }}
             >
                 Cashly
