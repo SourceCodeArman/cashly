@@ -121,6 +121,9 @@ The Cashly frontend is built as a responsive web application with mobile-first d
 
 The frontend communicates with backend services through a RESTful API, with WebSocket connections for real-time transaction updates. Client-side encryption ensures sensitive data is protected before transmission. The application implements offline functionality, allowing users to view cached data when connectivity is limited.
 
+### Admin Portal
+A separate but integrated Admin Dashboard (`AdminDashboard.tsx`) provides system oversight, log viewing, user management, and API analytics.
+
 ### Backend Services
 The Cashly backend is built using a microservices architecture, enabling scalability and maintainability. Core services include:
 
@@ -128,7 +131,7 @@ The Cashly backend is built using a microservices architecture, enabling scalabi
 
 - **Account Aggregation Service**: Manages connections to financial data providers (e.g., Plaid, Yodlee). Handles OAuth flows, token refresh, and account synchronization. Processes webhooks for real-time transaction updates.
 
-- **Transaction Processing Service**: Ingests transaction data from aggregation services, normalizes transaction formats, and applies categorization rules. Implements machine learning models for automatic categorization and anomaly detection.
+- **Transaction Processing Service**: Ingests transaction data from aggregation services, normalizes transaction formats, and applies categorization rules. Implements **Google Gemini AI** for advanced automatic categorization and anomaly detection (see `GEMINI_SETUP.md`).
 
 - **Analytics Service**: Generates spending insights, trends, and forecasts. Processes large volumes of transaction data to produce aggregated analytics and recommendations. Implements caching for frequently accessed analytics.
 
@@ -155,6 +158,7 @@ Cashly uses a combination of relational and non-relational databases:
 - **Cloud Infrastructure**: AWS, Google Cloud, or Azure for hosting services, databases, and storage. Implements auto-scaling, load balancing, and disaster recovery.
 
 - **Monitoring and Analytics**: Services like Datadog, New Relic, or similar for application monitoring, error tracking, and performance analytics. Ensures system reliability and helps identify issues proactively.
+- **Admin Dashboard**: A dedicated internal portal for managing users, viewing system logs, monitoring API health, and debugging database issues. Implemented in `AdminDashboard.tsx`.
 
 ## Data Models
 
@@ -339,8 +343,9 @@ The MVP focuses on core functionality that delivers immediate value to users wit
 - User registration with email and password
 - User login and session management
 - Password reset functionality
-- Basic user profile management
+- User profile management
 - Terms of service and privacy policy acceptance
+- **Waitlist Support**: Pre-launch interest capture with `WaitlistLanding.tsx`.
 
 ### Single Bank Account Integration
 - Integration with one financial data provider (Plaid)
@@ -396,7 +401,7 @@ Phase 2 builds upon the MVP by adding intelligence, automation, and deeper insig
 
 ### Automatic Transaction Categorization
 - Rule-based auto-categorization (merchant name patterns, keyword matching)
-- Machine learning model for transaction categorization
+- **Gemini AI Integration**: Advanced categorization using Google's Gemini models (Flash/Pro) for high automation accuracy.
 - User feedback loop (learns from manual category corrections)
 - Confidence scores for auto-categorizations
 - Bulk categorization actions
@@ -497,6 +502,8 @@ Phase 3 introduces advanced features that leverage machine learning and automati
 - Weekly/monthly financial summaries
 
 ## Phase 4: Advanced Features and Scale
+**(Status: Partially Implemented - Key features like Bills and Debts are already live in the codebase)**
+
 Phase 4 focuses on advanced features, platform expansion, and scaling for growth.
 
 ### Investment Account Integration
@@ -507,14 +514,16 @@ Phase 4 focuses on advanced features, platform expansion, and scaling for growth
 - Investment transaction categorization
 
 ### Bill Management
-- Bill tracking and reminders
+### Bill Management (Implemented)
+- Bill tracking and reminders (Active in `Bills.tsx`)
 - Recurring bill detection
 - Bill payment scheduling
 - Bill amount tracking and trends
 - Due date alerts and calendar integration
 
 ### Debt Management
-- Debt account tracking (credit cards, loans)
+### Debt Management (Implemented)
+- Debt account tracking (credit cards, loans) (Active in `Debts.tsx`)
 - Debt payoff strategies and recommendations
 - Debt snowball/avalanche method calculators
 - Interest tracking and projections

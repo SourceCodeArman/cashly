@@ -22,10 +22,6 @@ export function AuthLayout({ children }: AuthLayoutProps) {
     return null
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-accent/10 p-4">
-      <div className="w-full max-w-md">{children}</div>
-    </div>
-  )
+  return <>{children}</>
 }
 

@@ -1,538 +1,625 @@
-import { Link } from 'react-router-dom'
-import { TrendingUp, Target, Shield, PiggyBank, Bell, Zap, ArrowRight, CheckCircle2, Wallet, ArrowUpRight, ArrowDownRight, LayoutDashboard, Receipt, Tag, CreditCard, Settings, DollarSign } from 'lucide-react'
+import { LayoutDashboard, Target, Bell, Settings, Landmark, CreditCard, Wallet, Building2, ShieldCheck, Lock, Activity } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { PublicHeader } from '@/components/PublicHeader'
-import { useAuthStore } from '@/store/authStore'
-import { motion, type Variants, useInView, animate } from 'framer-motion'
-import { useEffect, useState, useRef } from 'react'
+import { motion, useScroll, useSpring } from 'framer-motion'
+import { useMemo } from 'react'
+import { LandingNavbar } from '@/components/landing/LandingNavbar'
+import { LandingFooter } from '@/components/landing/LandingFooter'
 
 export function Landing() {
-  const { isAuthenticated } = useAuthStore()
-  const [stats, setStats] = useState({
-    active_users: 0,
-    transactions_tracked: 0,
-    total_savings: 0,
-    budgets_created: 0,
+  const { scrollYProgress } = useScroll()
+  const scaleX = useSpring(scrollYProgress, {
+    stiffness: 100,
+    damping: 30,
+    restDelta: 0.001
   })
 
-  useEffect(() => {
-    fetch('http://localhost:8000/api/v1/health/landing-stats/')
-      .then((res) => res.json())
-      .then((data) => setStats(data))
-      .catch((err) => console.error('Failed to fetch stats:', err))
-  }, [])
-
-  const container: Variants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-        delayChildren: 0.3,
-      },
-    },
-  }
-
-  const item: Variants = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 50 } },
-  }
-
-  const features = [
-    {
-      icon: TrendingUp,
-      title: 'Smart Tracking',
-      description: 'Automatically track and categorize your expenses with AI-powered insights.',
-      gradient: 'from-blue-500 to-cyan-400',
-      delay: 0.1,
-    },
-    {
-      icon: Target,
-      title: 'Goal Setting',
-      description: 'Set savings goals and track your progress toward financial milestones.',
-      gradient: 'from-emerald-500 to-green-400',
-      delay: 0.2,
-    },
-    {
-      icon: Shield,
-      title: 'Secure & Private',
-      description: 'Bank-level encryption keeps your financial data safe and secure.',
-      gradient: 'from-purple-500 to-pink-400',
-      delay: 0.3,
-    },
-    {
-      icon: PiggyBank,
-      title: 'Budget Management',
-      description: 'Create and manage budgets to stay on track with your spending.',
-      gradient: 'from-orange-500 to-amber-400',
-      delay: 0.4,
-    },
-    {
-      icon: Bell,
-      title: 'Instant Alerts',
-      description: 'Get notified about important transactions and budget updates.',
-      gradient: 'from-red-500 to-rose-400',
-      delay: 0.5,
-    },
-    {
-      icon: Zap,
-      title: 'Fast & Efficient',
-      description: 'Lightning-fast performance with real-time sync across all devices.',
-      gradient: 'from-indigo-500 to-violet-400',
-      delay: 0.6,
-    },
-  ]
-
   return (
-    <div className="min-h-screen w-full bg-background overflow-x-hidden selection:bg-primary/20">
-      {/* Background Gradients */}
-      <div className="fixed inset-0 -z-10 h-full w-full bg-background">
-        <div className="absolute top-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-primary/10 blur-[100px] animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-accent/10 blur-[100px] animate-pulse" style={{ animationDelay: '1s' }} />
+    <div className="min-h-screen bg-[#FDFCF8] text-[#1A1A1A] font-sans selection:bg-[#E3E8D3] selection:text-[#1A1A1A] overflow-x-hidden w-full">
+      {/* Progress Bar */}
+      <motion.div
+        className="fixed top-0 left-0 right-0 h-1 bg-[#1A1A1A] z-50 origin-[0%]"
+        style={{ scaleX }}
+      />
+
+      <LandingNavbar />
+      <Hero />
+      <FeaturesGrid />
+      <BigPicture />
+      <WhyChoose />
+      <TrustSection />
+      <Steps />
+      <Connect />
+      <LandingFooter />
+    </div>
+  )
+}
+// Removed local Navbar component
+
+
+function Hero() {
+  return (
+    <section className="pt-32 pb-20 w-full md:pt-48 md:pb-32 relative overflow-hidden">
+      <div className="max-w-[1400px] mx-auto text-center relative z-10">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <h1 className="text-6xl md:text-8xl lg:text-9xl font-serif tracking-tight mb-8 leading-[0.9]">
+            Take Control of <br />
+            <span className="relative inline-block px-4 mx-2">
+              <span className="italic relative z-10 text-[#1A1A1A]">Your Finances.</span>
+            </span>
+          </h1>
+          <p className="text-xl md:text-2xl text-[#1A1A1A]/60 max-w-2xl mx-auto mb-10 leading-relaxed">
+            Automated tracking, Gemini AI-powered intelligence, and goal-oriented savings for professionals who want to master their money.
+          </p>
+
+          <div className="max-w-4xl mx-auto mt-20 relative">
+            <motion.div
+              initial={{ opacity: 0, y: 40, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 1, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="relative aspect-[16/10] bg-[#1A1A1A] rounded-[2rem] p-3 shadow-2xl"
+            >
+              <div className="absolute inset-0 bg-[#E3E8D3]/10 rounded-[2rem] pointer-events-none" />
+              <SimulatedDashboard />
+            </motion.div>
+          </div>
+        </motion.div>
+
+        {/* Brand Bar */}
+        <div className="mt-24 grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12 opacity-60 max-w-4xl mx-auto">
+          {/* Placeholders for partner logos if needed, or remove */}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SimulatedDashboard() {
+  return (
+    <div className="w-full h-full bg-[#0A0A0A] rounded-[1.5rem] p-6 md:p-10 flex flex-col relative overflow-hidden border border-white/5">
+      {/* Abstract Header */}
+      <div className="flex justify-between items-center mb-12 opacity-20">
+        <div className="flex gap-4 items-center">
+          <div className="h-8 w-8 rounded-full bg-white" />
+          <div className="h-3 w-24 rounded-full bg-white" />
+        </div>
+        <div className="h-8 w-8 rounded-full bg-white" />
       </div>
 
-      {/* Header */}
-      <PublicHeader />
-
-      {/* Hero Section */}
-      <section className="relative pt-20 pb-32 overflow-hidden">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-12 lg:grid-cols-2 lg:gap-8 items-center">
-            <motion.div
-              variants={container}
-              initial="hidden"
-              animate="show"
-              className="flex flex-col items-start text-left"
-            >
-              <motion.div variants={item} className="inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-sm font-medium text-primary mb-6">
-                <span className="flex h-2 w-2 rounded-full bg-primary mr-2 animate-pulse"></span>
-                The Future of Personal Finance
-              </motion.div>
-
-              <motion.h1 variants={item} className="text-5xl font-extrabold tracking-tight sm:text-6xl lg:text-7xl mb-6 bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70">
-                Master Your Money <br />
-                <span className="text-primary">Build Your Wealth</span>
-              </motion.h1>
-
-              <motion.p variants={item} className="text-xl text-muted-foreground mb-8 max-w-lg leading-relaxed">
-                Experience the next generation of financial tracking. AI-powered insights, real-time analytics, and beautiful visualizations to help you grow.
-              </motion.p>
-
-              <motion.div variants={item} className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-                {isAuthenticated ? (
-                  <Button asChild size="lg" className="rounded-full h-12 px-8 text-base shadow-xl shadow-primary/20 hover:shadow-primary/30 hover:scale-105 transition-all duration-300">
-                    <Link to="/dashboard">
-                      Go to Dashboard
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
-                ) : (
-                  <>
-                    <Button asChild size="lg" className="rounded-full h-12 px-8 text-base shadow-xl shadow-primary/20 hover:shadow-primary/30 hover:scale-105 transition-all duration-300">
-                      <Link to="/register">
-                        Start Free Trial
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Link>
-                    </Button>
-                    <Button asChild size="lg" variant="outline" className="rounded-full h-12 px-8 text-base hover:bg-secondary/50 border-border/50 backdrop-blur-sm">
-                      <Link to="/login">Sign In</Link>
-                    </Button>
-                  </>
-                )}
-              </motion.div>
-
-              <motion.div variants={item} className="mt-10 flex items-center gap-4 text-sm text-muted-foreground">
-                <div className="flex -space-x-2">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="h-8 w-8 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold">
-                      {String.fromCharCode(64 + i)}
-                    </div>
-                  ))}
-                </div>
-                <p>Trusted by 10,000+ users</p>
-              </motion.div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
-              animate={{ opacity: 1, scale: 1, rotate: 0 }}
-              transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
-              className="relative hidden lg:block"
-            >
-              <div className="relative z-10 rounded-2xl border border-border/50 bg-background/50 backdrop-blur-xl p-2 shadow-2xl shadow-primary/10 rotate-2 hover:rotate-0 transition-transform duration-500">
-                <div className="flex rounded-xl bg-background border border-border/50 overflow-hidden">
-                  {/* Closed Sidebar Preview */}
-                  <div className="w-12 bg-sidebar-accent border-r border-border/50 flex flex-col items-center py-3 space-y-3">
-                    {/* Logo */}
-                    <div className="h-8 w-8 mb-1">
-                      <img src="/logo.svg" alt="Logo" className="h-full w-full" />
-                    </div>
-
-                    {/* Main Navigation Icons */}
-                    <div className="flex flex-col items-center space-y-2.5 pt-2">
-                      <LayoutDashboard className="h-4 w-4 text-primary" />
-                      <Wallet className="h-4 w-4 text-muted-foreground" />
-                      <Receipt className="h-4 w-4 text-muted-foreground" />
-                      <Target className="h-4 w-4 text-muted-foreground" />
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
-                      <Tag className="h-4 w-4 text-muted-foreground" />
-                    </div>
-
-                    {/* Bottom Navigation Icons */}
-                    <div className="flex-1 flex flex-col justify-end items-center space-y-2.5 pb-1">
-                      <CreditCard className="h-4 w-4 text-muted-foreground" />
-                      <Bell className="h-4 w-4 text-muted-foreground" />
-                      <Settings className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  </div>
-
-                  {/* Dashboard Content Preview */}
-                  <div className="flex-1">
-                    <div className="p-6 space-y-6">
-                      {/* Page Header */}
-                      <div className="space-y-1">
-                        <div className="h-3 w-32 rounded bg-foreground/90"></div>
-                        <div className="h-2 w-48 rounded bg-muted-foreground/40"></div>
-                      </div>
-
-                      {/* Stats Cards Grid */}
-                      <div className="grid grid-cols-3 gap-4">
-                        {/* Total Balance Card */}
-                        <div className="rounded-lg border border-border/50 bg-card p-3 space-y-2 shadow-soft">
-                          <div className="flex items-center justify-between">
-                            <div className="h-2 w-16 rounded bg-muted-foreground/50"></div>
-                            <Wallet className="h-4 w-4 text-primary" />
-                          </div>
-                          <div className="h-4 w-20 rounded bg-foreground/90"></div>
-                        </div>
-
-                        {/* Total Income Card */}
-                        <div className="rounded-lg border border-border/50 bg-card p-3 space-y-2 shadow-soft">
-                          <div className="flex items-center justify-between">
-                            <div className="h-2 w-16 rounded bg-muted-foreground/50"></div>
-                            <ArrowUpRight className="h-4 w-4 text-success" />
-                          </div>
-                          <div className="h-4 w-20 rounded bg-success/90"></div>
-                        </div>
-
-                        {/* Total Spending Card */}
-                        <div className="rounded-lg border border-border/50 bg-card p-3 space-y-2 shadow-soft">
-                          <div className="flex items-center justify-between">
-                            <div className="h-2 w-16 rounded bg-muted-foreground/50"></div>
-                            <ArrowDownRight className="h-4 w-4 text-destructive" />
-                          </div>
-                          <div className="h-4 w-20 rounded bg-destructive/90"></div>
-                        </div>
-                      </div>
-
-                      {/* Charts & Goals Grid */}
-                      <div className="grid grid-cols-2 gap-4">
-                        {/* Spending Trend */}
-                        <div className="rounded-lg border border-border/50 bg-card p-4 space-y-3 shadow-soft">
-                          <div className="space-y-1">
-                            <div className="h-2.5 w-24 rounded bg-foreground/80"></div>
-                            <div className="h-2 w-32 rounded bg-muted-foreground/40"></div>
-                          </div>
-                          <div className="h-24 w-full pt-2 relative overflow-hidden">
-                            {/* Simulated Line Chart */}
-                            <svg viewBox="0 0 100 40" className="w-full h-full overflow-visible" preserveAspectRatio="none">
-                              <defs>
-                                <linearGradient id="trendGradient" x1="0" x2="0" y1="0" y2="1">
-                                  <stop offset="0%" stopColor="hsl(var(--destructive))" stopOpacity="0.2" />
-                                  <stop offset="100%" stopColor="hsl(var(--destructive))" stopOpacity="0" />
-                                </linearGradient>
-                              </defs>
-                              <motion.path
-                                initial={{ pathLength: 0, opacity: 0 }}
-                                animate={{ pathLength: 1, opacity: 1 }}
-                                transition={{ duration: 1.5, ease: "easeOut", delay: 0.5 }}
-                                d="M0,35 C10,32 20,25 30,28 C40,31 50,20 60,22 C70,24 80,15 90,10 L100,5"
-                                fill="none"
-                                stroke="hsl(var(--destructive))"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                              <motion.path
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                transition={{ duration: 1, delay: 1 }}
-                                d="M0,35 C10,32 20,25 30,28 C40,31 50,20 60,22 C70,24 80,15 90,10 L100,5 V40 H0 Z"
-                                fill="url(#trendGradient)"
-                                stroke="none"
-                              />
-                            </svg>
-                          </div>
-                        </div>
-
-                        {/* Active Goals */}
-                        <div className="rounded-lg border border-border/50 bg-card p-4 space-y-4 shadow-soft">
-                          <div className="space-y-1">
-                            <div className="h-2.5 w-20 rounded bg-foreground/80"></div>
-                            <div className="h-2 w-28 rounded bg-muted-foreground/40"></div>
-                          </div>
-                          <div className="space-y-3">
-                            {[1, 2].map((i) => (
-                              <div key={i} className="space-y-1.5">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-1.5">
-                                    <Target className="h-3 w-3 text-primary" />
-                                    <div className="h-2 w-16 rounded bg-muted-foreground/50"></div>
-                                  </div>
-                                  <div className="h-2 w-8 rounded bg-muted-foreground/30"></div>
-                                </div>
-                                <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-                                  <motion.div
-                                    initial={{ width: 0 }}
-                                    animate={{ width: i === 1 ? '75%' : '45%' }}
-                                    transition={{ duration: 1, delay: 1 + i * 0.2, ease: "easeOut" }}
-                                    className="h-full bg-primary rounded-full"
-                                  />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Floating Elements */}
-              <motion.div
-                animate={{ y: [0, -20, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="absolute -top-12 -right-12 z-0 h-64 w-64 rounded-full bg-primary/20 blur-3xl"
-              />
-              <motion.div
-                animate={{ y: [0, 20, 0] }}
-                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                className="absolute -bottom-12 -left-12 z-0 h-64 w-64 rounded-full bg-accent/20 blur-3xl"
-              />
-            </motion.div>
+      {/* Main Metric */}
+      <div className="mb-auto z-10">
+        <motion.div
+          initial={{ width: 0, opacity: 0 }}
+          whileInView={{ width: "auto", opacity: 1 }}
+          transition={{ duration: 1, ease: "easeOut" }}
+          viewport={{ once: true }}
+        >
+          <div className="text-4xl md:text-6xl font-serif text-white mb-2 tracking-tight">
+            $12,450<span className="text-[#E3E8D3]">.00</span>
           </div>
-        </div>
-      </section>
+        </motion.div>
+        <div className="h-4 w-32 rounded-full bg-[#333]" />
+      </div>
 
-      {/* Features Grid */}
-      <section className="py-24 relative">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mb-16 text-center max-w-3xl mx-auto">
-            <motion.h2
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="mb-4 text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl"
-            >
-              Everything you need to <span className="text-primary">succeed</span>
-            </motion.h2>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
-              className="text-lg text-muted-foreground"
-            >
-              Powerful features designed to help you achieve your financial goals, wrapped in a beautiful interface.
-            </motion.p>
-          </div>
+      {/* Animated Graph */}
+      <div className="relative h-48 w-full z-10">
+        <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 100">
+          <defs>
+            <linearGradient id="grid-gradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#E3E8D3" stopOpacity="0.1" />
+              <stop offset="100%" stopColor="#E3E8D3" stopOpacity="0" />
+            </linearGradient>
+          </defs>
 
-          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((feature, index) => {
-              const Icon = feature.icon
-              return (
-                <motion.div
-                  key={feature.title}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.1 }}
-                  whileHover={{ y: -5 }}
-                >
-                  <Card className="h-full border-border/50 bg-background/50 backdrop-blur-sm transition-all hover:shadow-xl hover:shadow-primary/5 hover:border-primary/20 group">
-                    <CardHeader>
-                      <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${feature.gradient} text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                        <Icon className="h-6 w-6" />
-                      </div>
-                      <CardTitle className="text-xl">{feature.title}</CardTitle>
-                      <CardDescription className="text-base leading-relaxed">{feature.description}</CardDescription>
-                    </CardHeader>
-                  </Card>
-                </motion.div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
-
-      {/* Social Proof / Stats */}
-      <section className="py-20 border-y border-border/50 bg-secondary/30">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 gap-8 md:grid-cols-4 text-center">
-            <StatsCounter
-              label="Active Users"
-              value={stats.active_users}
-              suffix="+"
-            />
-            <StatsCounter
-              label="Transactions Tracked"
-              value={stats.transactions_tracked}
-              prefix="$"
-              suffix="+"
-              isCurrency
-            />
-            <StatsCounter
-              label="Total Savings"
-              value={stats.total_savings}
-              prefix="$"
-              suffix="+"
-              isCurrency
-            />
-            <StatsCounter
-              label="Budgets Created"
-              value={stats.budgets_created}
-              suffix="+"
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* CTA Section */}
-      <section className="py-24 px-4">
-        <div className="mx-auto w-full max-w-5xl">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
+          {/* Area under curve */}
+          <motion.path
+            d="M0 100 L0 60 Q 25 70, 50 40 T 100 20 L 100 100 Z"
+            fill="url(#grid-gradient)"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            transition={{ duration: 1.5 }}
             viewport={{ once: true }}
-          >
-            <Card className="relative overflow-hidden border-0 bg-gradient-to-br from-primary to-accent text-white shadow-2xl shadow-primary/20">
-              <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
-              <div className="absolute -top-24 -right-24 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
-              <div className="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
+          />
 
-              <CardContent className="relative flex flex-col items-center justify-center py-20 text-center px-6">
-                <motion.h2
-                  initial={{ y: 20, opacity: 0 }}
-                  whileInView={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.2 }}
-                  className="mb-6 text-4xl font-bold tracking-tight sm:text-5xl"
-                >
-                  Ready to transform your finances?
-                </motion.h2>
-                <motion.p
-                  initial={{ y: 20, opacity: 0 }}
-                  whileInView={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className="mb-10 text-lg text-white/90 max-w-2xl"
-                >
-                  Join thousands of smart users who are taking control of their financial future today. No credit card required for the free trial.
-                </motion.p>
+          {/* Line */}
+          <motion.path
+            d="M0 60 Q 25 70, 50 40 T 100 20"
+            fill="none"
+            stroke="#E3E8D3"
+            strokeWidth="2" // Scaled relative to viewBox, roughly
+            vectorEffect="non-scaling-stroke"
+            initial={{ pathLength: 0 }}
+            whileInView={{ pathLength: 1 }}
+            transition={{ duration: 2, ease: "easeInOut" }}
+            viewport={{ once: true }}
+          />
 
-                <motion.div
-                  initial={{ y: 20, opacity: 0 }}
-                  whileInView={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.4 }}
-                >
-                  {isAuthenticated ? (
-                    <Button asChild size="lg" variant="secondary" className="h-14 px-8 text-lg rounded-full shadow-xl hover:scale-105 transition-transform text-primary font-bold">
-                      <Link to="/dashboard">
-                        Go to Dashboard
-                        <ArrowRight className="ml-2 h-5 w-5" />
-                      </Link>
-                    </Button>
-                  ) : (
-                    <Button asChild size="lg" variant="secondary" className="h-14 px-8 text-lg rounded-full shadow-xl hover:scale-105 transition-transform text-primary font-bold">
-                      <Link to="/register">
-                        Get Started Now
-                        <ArrowRight className="ml-2 h-5 w-5" />
-                      </Link>
-                    </Button>
-                  )}
-                </motion.div>
+          {/* Dots on line */}
+          <motion.circle cx="50" cy="40" r="1.5" fill="#E3E8D3"
+            initial={{ scale: 0 }}
+            whileInView={{ scale: 1 }}
+            transition={{ delay: 1 }}
+            viewport={{ once: true }}
+          />
+          <motion.circle cx="100" cy="20" r="1.5" fill="#E3E8D3"
+            initial={{ scale: 0 }}
+            whileInView={{ scale: 1 }}
+            transition={{ delay: 1.8 }}
+            viewport={{ once: true }}
+          />
+        </svg>
+      </div>
 
-                <div className="mt-8 flex items-center gap-6 text-sm text-white/80">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>No credit card required</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>7-day free trial</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="w-full border-t border-border/50 bg-background py-12">
-        <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
-            <div className="flex items-center gap-2">
-              <img src="/logo.svg" alt="Cashly Logo" className="h-8 w-8" />
-              <span className="font-bold text-lg">Cashly</span>
-            </div>
-            <div className="flex gap-8 text-sm text-muted-foreground">
-              <a href="#" className="hover:text-primary transition-colors">Privacy</a>
-              <a href="#" className="hover:text-primary transition-colors">Terms</a>
-              <Link to="/docs" className="hover:text-primary transition-colors">Documentation</Link>
-              <a href="#" className="hover:text-primary transition-colors">Contact</a>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} Cashly. All rights reserved.
-            </p>
-          </div>
-        </div>
-      </footer>
+      {/* Background Dots Animation */}
+      <div className="absolute inset-0 opacity-20 pointer-events-none">
+        {[...Array(12)].map((_, i) => (
+          <motion.div
+            key={i}
+            className="absolute w-1 h-1 bg-white rounded-full bg-blend-overlay"
+            initial={{
+              x: Math.random() * 100 + "%",
+              y: Math.random() * 100 + "%",
+              opacity: Math.random()
+            }}
+            animate={{
+              y: [null, Math.random() * 100 + "%"],
+              opacity: [null, Math.random(), null]
+            }}
+            transition={{
+              duration: 10 + Math.random() * 20,
+              repeat: Infinity,
+              ease: "linear"
+            }}
+          />
+        ))}
+      </div>
     </div>
   )
 }
 
-function StatsCounter({ label, value, prefix = '', suffix = '', isCurrency = false }: { label: string, value: number, prefix?: string, suffix?: string, isCurrency?: boolean }) {
-  const ref = useRef<HTMLSpanElement>(null)
-  const isInView = useInView(ref, { once: true })
-
-  useEffect(() => {
-    if (isInView && ref.current) {
-      // Format number logic
-      const format = (v: number) => {
-        if (v === 0) return '0'
-        if (isCurrency) {
-          if (v >= 1000000000) return (v / 1000000000).toFixed(1) + 'B'
-          if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M'
-          if (v >= 1000) return (v / 1000).toFixed(1) + 'K'
-          return v.toFixed(0)
-        }
-        if (v >= 1000000) return (v / 1000000).toFixed(1) + 'M'
-        if (v >= 1000) return (v / 1000).toFixed(1) + 'K'
-        return v.toFixed(0)
-      }
-
-      const node = ref.current
-
-      // Use faster animation for small numbers to avoid "stuck" look
-      const duration = value < 100 ? 0.5 : 2
-
-      const controls = animate(0, value, {
-        duration,
-        onUpdate(value) {
-          node.textContent = prefix + format(value) + suffix
-        },
-      })
-      return () => controls.stop()
+function FeaturesGrid() {
+  const features = [
+    {
+      icon: Target,
+      label: "Smart Savings",
+      title: "Smart Savings Goals",
+      desc: "Create specific goals for emergency funds, vacations, or debt payoff. We calculate the monthly contributions for you."
+    },
+    {
+      icon: LayoutDashboard,
+      label: "Overview",
+      title: "Automatic Tracking",
+      desc: "Connect your bank accounts and credit cards to see all your transactions in one place. No manual entry required."
+    },
+    {
+      icon: Bell,
+      label: "Intelligence",
+      title: "AI-Driven Spending Insights",
+      desc: "Visualize spending trends, identify bad habits, and get personalized recommendations to reduce expenses."
+    },
+    {
+      icon: Settings,
+      label: "Control",
+      title: "Gemini AI Categorization",
+      desc: "Powered by Google Gemini AI to automatically categorize your transactions with unmatched accuracy."
     }
-  }, [isInView, value, prefix, suffix, isCurrency])
+  ]
 
   return (
-    <div className="space-y-2">
-      <div className="text-4xl font-bold text-foreground">
-        <span ref={ref}>0</span>
+    <section className="py-24 w-full">
+      <div className="max-w-[1400px] mx-auto">
+        <div className="mb-20 md:text-center max-w-2xl mx-auto">
+          <h2 className="text-4xl md:text-6xl font-serif mb-6">We've cracked the code.</h2>
+          <p className="text-lg text-[#1A1A1A]/60">
+            Financial clarity shouldn't be complicated. We use advanced AI to do the heavy lifting for you.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {features.map((f, i) => (
+            <motion.div
+              key={i}
+              whileHover={{ y: -5 }}
+              className="p-8 rounded-[2rem] bg-[#FDFCF8] border border-[#1A1A1A]/5 hover:shadow-xl transition-all duration-300"
+            >
+              <div className="w-12 h-12 bg-[#1A1A1A] text-white rounded-2xl flex items-center justify-center mb-6">
+                <f.icon strokeWidth={1.5} />
+              </div>
+              <div className="text-xs font-bold uppercase tracking-widest opacity-40 mb-3">{f.label}</div>
+              <h3 className="text-xl font-bold mb-3">{f.title}</h3>
+              <p className="text-sm opacity-60 leading-relaxed">{f.desc}</p>
+            </motion.div>
+          ))}
+        </div>
       </div>
-      <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider">{label}</div>
+    </section>
+  )
+}
+
+function BigPicture() {
+  return (
+    <section className="py-32 w-full">
+      <div className="max-w-[1400px] mx-auto grid lg:grid-cols-2 gap-20 items-center">
+        <div className="order-2 lg:order-1">
+          <div className="aspect-[4/5] rounded-[2rem] bg-[#111] relative overflow-hidden p-10 flex items-center justify-center">
+            <SimulatedNetwork />
+          </div>
+        </div>
+
+        <div className="order-1 lg:order-2">
+          <h2 className="text-5xl md:text-7xl font-serif mb-8 leading-[0.9]">See the <br /><span className="italic text-[#3A4D39]">Big Picture.</span></h2>
+          <p className="text-xl opacity-60 mb-12 leading-relaxed">
+            Stop guessing where your money went. Cashly gives you a crystal-clear view of your financial health, empowered by next-gen AI.
+          </p>
+
+          <div className="space-y-8">
+            {[
+              "Real-time net worth tracking",
+              "Investment portfolio integration",
+              "Predictive cash flow analysis"
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-4">
+                <div className="w-2 h-2 rounded-full bg-[#3A4D39]" />
+                <span className="text-lg font-medium">{item}</span>
+              </div>
+            ))}
+          </div>
+
+          <Button size="lg" className="mt-12 rounded-full px-8 bg-[#1A1A1A] hover:bg-[#1A1A1A]/80">
+            Explore Features
+          </Button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SimulatedNetwork() {
+  const nodes = [
+    { icon: Landmark, angle: 0, delay: 0 },
+    { icon: CreditCard, angle: 72, delay: 0.2 },
+    { icon: Wallet, angle: 144, delay: 0.4 },
+    { icon: Building2, angle: 216, delay: 0.6 },
+    { icon: Landmark, angle: 288, delay: 0.8 },
+  ]
+
+  return (
+    <div className="w-full h-full relative flex items-center justify-center">
+      {/* Central Hub (Cashly) */}
+      <motion.div
+        initial={{ scale: 0 }}
+        whileInView={{ scale: 1 }}
+        transition={{ type: "spring", duration: 1.5 }}
+        viewport={{ once: true }}
+        className="w-32 h-32 rounded-full bg-[#1A1A1A] border-4 border-[#222] flex flex-col items-center justify-center z-20 shadow-2xl relative"
+      >
+        <div className="text-2xl font-serif font-bold text-white tracking-tight">Cashly</div>
+        <div className="text-[10px] uppercase tracking-widest text-[#E3E8D3] mt-1 opacity-80">Central</div>
+
+        {/* Pulsing ring */}
+        <motion.div
+          className="absolute inset-0 rounded-full border border-[#E3E8D3]/30"
+          animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0, 0.5] }}
+          transition={{ duration: 3, repeat: Infinity }}
+        />
+      </motion.div>
+
+      {/* Satellite Nodes (Banks) */}
+      {nodes.map((node, i) => {
+        const angleRad = (node.angle - 90) * (Math.PI / 180)
+        const x = 50 + 35 * Math.cos(angleRad)
+        const y = 50 + 35 * Math.sin(angleRad)
+
+        return (
+          <div key={i} className="absolute inset-0 pointer-events-none">
+            {/* Connecting Line */}
+            <svg className="absolute inset-0 w-full h-full overflow-visible">
+              <motion.line
+                x1="50%" y1="50%"
+                x2={`${x}%`} y2={`${y}%`}
+                stroke="#E3E8D3"
+                strokeWidth="2"
+                strokeOpacity="0.1"
+                initial={{ pathLength: 0 }}
+                whileInView={{ pathLength: 1 }}
+                transition={{ duration: 0.8, delay: node.delay }}
+                viewport={{ once: true }}
+              />
+            </svg>
+
+            {/* Flowing Data Particle */}
+            <motion.div
+              className="absolute w-1.5 h-1.5 bg-[#E3E8D3] rounded-full z-10 -translate-x-1/2 -translate-y-1/2"
+              initial={{ left: `${x}%`, top: `${y}%`, opacity: 0 }}
+              animate={{
+                left: [`${x}%`, "50%"],
+                top: [`${y}%`, "50%"],
+                opacity: [0, 1, 0]
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                ease: "linear",
+                delay: node.delay
+              }}
+            />
+
+            {/* Satellite Icon */}
+            <motion.div
+              className="absolute w-16 h-16 rounded-2xl bg-white border border-[#1A1A1A]/10 flex items-center justify-center shadow-lg z-20"
+              style={{ left: `${x}%`, top: `${y}%`, marginLeft: '-32px', marginTop: '-32px' }}
+              initial={{ scale: 0, opacity: 0 }}
+              whileInView={{ scale: 1, opacity: 1 }}
+              transition={{ delay: node.delay, type: "spring" }}
+              viewport={{ once: true }}
+            >
+              <node.icon className="w-6 h-6 text-[#1A1A1A]" strokeWidth={1.5} />
+            </motion.div>
+          </div>
+        )
+      })}
     </div>
+  )
+}
+
+function WhyChoose() {
+  const tableData = [
+    { label: "Automatic Tracking", us: "Included", them: "Manual" },
+    { label: "Gemini AI Categorization", us: "Included", them: "Basic Rules" },
+    { label: "Security", us: "Bank-Level", them: "Standard" },
+    { label: "Real-time Sync", us: "Instant", them: "Delayed" },
+    { label: "Support", us: "Priority", them: "Email only" },
+  ]
+
+  return (
+    <section className="py-32 w-full px-10 bg-[#F5F5F0]">
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-20">
+          <span className="text-sm font-bold uppercase tracking-widest opacity-40">Comparisons</span>
+          <h2 className="text-5xl md:text-6xl font-serif mt-4">Why Choose Cashly?</h2>
+          <p className="mt-6 text-lg opacity-60 max-w-lg mx-auto">
+            See how we compare to traditional spreadsheet budgeting and other apps.
+          </p>
+          <div className="mt-8">
+            <span className="inline-block px-4 py-1.5 rounded-full bg-[#E3E8D3] text-sm font-medium">
+              New Standard
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-[#1A1A1A]/5 overflow-hidden">
+          <div className="grid grid-cols-3 p-6 border-b border-[#1A1A1A]/5 bg-[#FAFAFA] text-sm font-bold uppercase tracking-wider opacity-60">
+            <div>Feature</div>
+            <div className="text-center text-[#1A1A1A] opacity-100">Cashly</div>
+            <div className="text-right">Others</div>
+          </div>
+          {tableData.map((row, i) => (
+            <div key={i} className="grid grid-cols-3 p-6 border-b border-[#1A1A1A]/5 last:border-0 hover:bg-[#FDFCF8] transition-colors">
+              <div className="font-medium opacity-70">{row.label}</div>
+              <div className="text-center font-bold font-serif">{row.us}</div>
+              <div className="text-right opacity-50">{row.them}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function TrustSection() {
+  const items = [
+    {
+      icon: Lock,
+      title: "Bank-Grade Encryption",
+      desc: "Your financial data is encrypted with AES-256 standards. We use the same security protocols as the world's largest banks."
+    },
+    {
+      icon: ShieldCheck,
+      title: "Privacy First",
+      desc: "We never sell your data. Your financial habits are your business, and our business is helping you optimize them."
+    },
+    {
+      icon: Activity,
+      title: "99.9% Uptime",
+      desc: "Financial clarity whenever you need it. Our redundant infrastructure ensures Cashly is always ready."
+    }
+  ]
+
+  return (
+    <section className="py-32 w-full">
+      <div className="max-w-[1400px] mx-auto">
+        <div className="text-center mb-24 max-w-2xl mx-auto">
+          <h2 className="text-5xl md:text-7xl font-serif mb-6">Built on Trust.</h2>
+          <p className="text-xl opacity-60">
+            Security isn't a feature; it's our foundation. We protect your wealth with industry-leading standards.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-8">
+          {items.map((item, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              whileHover={{ y: -5 }}
+              transition={{ delay: i * 0.1, duration: 0.5 }}
+              viewport={{ once: true }}
+              className="bg-[#FAFAFA] border border-[#1A1A1A]/5 p-8 md:p-12 rounded-[2rem] hover:shadow-xl transition-all duration-300 group"
+            >
+              <div className="w-16 h-16 rounded-2xl bg-[#E3E8D3] flex items-center justify-center mb-8 group-hover:bg-[#1A1A1A] group-hover:text-white transition-colors duration-300">
+                <item.icon className="w-8 h-8" strokeWidth={1.5} />
+              </div>
+              <h3 className="text-2xl font-bold mb-4">{item.title}</h3>
+              <p className="text-[#1A1A1A]/60 leading-relaxed">
+                {item.desc}
+              </p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function Steps() {
+  return (
+    <section className="py-32 w-full bg-white">
+      <div className="max-w-[1400px] mx-auto flex flex-col items-center">
+        <div className="flex flex-col items-center text-center mb-20">
+          <h2 className="text-5xl md:text-7xl font-serif mb-6">Map Your Success</h2>
+          <Button
+            className="rounded-full border border-[#1A1A1A] bg-transparent text-[#1A1A1A] hover:bg-[#1A1A1A] hover:text-white px-8 h-12 text-lg transition-colors duration-300"
+          >
+            Start Mapping
+          </Button>
+        </div>
+
+        <div className="flex items-center justify-between border-t border-[#1A1A1A]/10 pt-12 w-full">
+          {[
+            { num: "01", title: "Connect", desc: "Securely link your bank accounts and credit cards." },
+            { num: "02", title: "Analyze", desc: "Our AI automatically categorizes your transactions and identifies trends." },
+            { num: "03", title: "Achieve", desc: "Set goals and let Cashly guide you to financial freedom." },
+          ].map((step, i) => (
+            <div key={i} className="group cursor-pointer">
+              <div className="text-6xl font-serif opacity-10 mb-6 group-hover:opacity-100 group-hover:text-[#E3E8D3] transition-all duration-500">{step.num}</div>
+              <h3 className="text-2xl font-bold mb-4">{step.title}</h3>
+              <p className="text-[#1A1A1A]/60 leading-relaxed max-w-xs">{step.desc}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-24 rounded-[2rem] overflow-hidden aspect-[21/9] relative w-full">
+          <SimulatedJourney />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SimulatedJourney() {
+  return (
+    <div className="w-full h-full bg-[#1A1A1A] rounded-[2rem] relative overflow-hidden flex items-center justify-center">
+      {/* Background Grid */}
+      <div className="absolute inset-0 grid grid-cols-6 grid-rows-3 gap-8 opacity-10 pointer-events-none">
+        {[...Array(18)].map((_, i) => (
+          <div key={i} className="border border-[#E3E8D3]/20 rounded-xl" />
+        ))}
+      </div>
+
+      {/* Path */}
+      <div className="relative w-2/3 h-1/2">
+        <svg className="w-full h-full overflow-visible" viewBox="0 0 100 50" preserveAspectRatio="none">
+          {/* Base Line */}
+          <motion.path
+            d="M0 50 C 20 50, 20 25, 50 25 S 80 0, 100 0"
+            fill="none"
+            stroke="#E3E8D3"
+            strokeWidth="0.5"
+            strokeOpacity="0.2"
+            vectorEffect="non-scaling-stroke"
+          />
+
+          {/* Animated Line */}
+          <motion.path
+            d="M0 50 C 20 50, 20 25, 50 25 S 80 0, 100 0"
+            fill="none"
+            stroke="#E3E8D3"
+            strokeWidth="0.5"
+            vectorEffect="non-scaling-stroke"
+            initial={{ pathLength: 0 }}
+            whileInView={{ pathLength: 1 }}
+            transition={{ duration: 2, ease: "easeInOut" }}
+            viewport={{ once: true }}
+          />
+        </svg>
+
+        {/* Milestones */}
+        {[
+          { x: '0%', y: '100%', label: 'Start' },
+          { x: '50%', y: '50%', label: 'Growth' },
+          { x: '100%', y: '0%', label: 'Freedom' }
+        ].map((point, i) => (
+          <motion.div
+            key={i}
+            className="absolute w-4 h-4 rounded-full bg-[#E3E8D3] shadow-[0_0_20px_rgba(227,232,211,0.5)] z-10"
+            style={{
+              left: point.x,
+              top: point.y,
+            }}
+            initial={{ scale: 0, x: "-50%", y: "-50%" }}
+            whileInView={{ scale: 1, x: "-50%", y: "-50%" }}
+            transition={{ delay: 0.5 + i * 0.5, type: "spring" }}
+            viewport={{ once: true }}
+          >
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 text-[10px] uppercase font-bold tracking-widest text-white/50 bg-black/50 px-2 py-1 rounded-full whitespace-nowrap opacity-0 md:opacity-100">
+              {point.label}
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function Connect() {
+  return (
+    <section className="py-32 w-full text-center">
+      <div className="max-w-2xl mx-auto">
+        <h2 className="text-5xl md:text-7xl font-serif mb-8">Connect with us</h2>
+        <p className="text-xl opacity-60 mb-12">
+          Ready to take control? Join Cashly today and start building your wealth.
+        </p>
+        <Button className="h-14 px-10 rounded-full bg-[#3A4D39] text-white hover:bg-[#2F3E2E] text-lg">
+          Get Started Now
+        </Button>
+      </div>
+    </section>
+  )
+}
+
+// Footer removed
+
+
+
+
+function TapeBackground() {
+  const path = useMemo(() => {
+    // Generate right edge (from top to bottom)
+    let rightEdge = "L100,0 "
+    for (let y = 5; y <= 100; y += 5) {
+      const x = 98 + Math.random() * 4 // Random between 98 and 102
+      rightEdge += `L${x.toFixed(1)},${y} `
+    }
+
+    // Generate left edge (from bottom to top)
+    let leftEdge = "L0,100 "
+    for (let y = 95; y >= 0; y -= 5) {
+      const x = -2 + Math.random() * 4 // Random between -2 and 2
+      leftEdge += `L${x.toFixed(1)},${y} `
+    }
+
+    return `M0,0 ${rightEdge} L0,100 ${leftEdge} Z`
+  }, [])
+
+  return (
+    <motion.div
+      initial={{ scaleX: 0, opacity: 0 }}
+      animate={{ scaleX: 1, opacity: 1 }}
+      transition={{ delay: 0.5, duration: 0.8, ease: "circOut" }}
+      className="absolute inset-0 -z-10 -rotate-2 -skew-x-12 origin-left"
+    >
+      <svg
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        className="w-[105%] h-[120%] -left-[2.5%] -top-[10%] absolute fill-[#E3E8D3]"
+      >
+        <path d={path} />
+      </svg>
+      {/* Tape texture/sheen */}
+      <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent mix-blend-overlay pointer-events-none" />
+    </motion.div>
   )
 }

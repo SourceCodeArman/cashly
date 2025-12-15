@@ -2,11 +2,9 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { Label } from '@/components/ui/label'
-import { PublicHeader } from '@/components/PublicHeader'
+import { LandingNavbar } from '@/components/landing/LandingNavbar'
+import { LandingFooter } from '@/components/landing/LandingFooter'
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
 
@@ -85,36 +83,29 @@ export function Pricing() {
             ? '/dashboard'
             : `/subscription?checkout=true&tier=${tier.id}&cycle=${isAnnual ? 'annual' : 'monthly'}`
 
-        // Encode the redirect URL to handle special characters properly
         navigate(`/register?redirect=${encodeURIComponent(redirectUrl)}`)
     }
 
     return (
-        <div className="min-h-screen w-full bg-background overflow-x-hidden selection:bg-primary/20">
-            {/* Background Gradients */}
-            <div className="fixed inset-0 -z-10 h-full w-full bg-background">
-                <div className="absolute top-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-primary/10 blur-[100px] animate-pulse" />
-                <div className="absolute bottom-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-accent/10 blur-[100px] animate-pulse" style={{ animationDelay: '1s' }} />
-            </div>
+        <div className="min-h-screen bg-[#FDFCF8] text-[#1A1A1A] font-sans selection:bg-[#E3E8D3] selection:text-[#1A1A1A] overflow-x-hidden w-full flex flex-col">
+            <LandingNavbar />
 
-            {/* Header */}
-            <PublicHeader />
-
-            <div className="py-24 px-4 sm:px-6 lg:px-8">
-                <div className="mx-auto max-w-7xl">
-                    <div className="text-center max-w-3xl mx-auto mb-16">
+            <main className="flex-grow pt-32 pb-20 w-full md:pt-48 md:pb-32 px-6 xl:px-0">
+                <div className="max-w-[1400px] mx-auto">
+                    <div className="text-center max-w-3xl mx-auto mb-20">
                         <motion.h1
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="text-4xl font-extrabold tracking-tight sm:text-5xl mb-4 bg-clip-text text-transparent bg-gradient-to-r from-foreground via-foreground/90 to-foreground/70"
+                            className="text-5xl md:text-7xl font-serif tracking-tight mb-8 leading-[0.9]"
                         >
-                            Simple, transparent pricing
+                            Simple, transparent <br />
+                            <span className="italic text-[#3A4D39]">pricing.</span>
                         </motion.h1>
                         <motion.p
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.1 }}
-                            className="text-xl text-muted-foreground mb-8"
+                            className="text-xl text-[#1A1A1A]/60 mb-10 leading-relaxed"
                         >
                             Choose the plan that's right for you. All plans include a 7-day free trial.
                         </motion.p>
@@ -123,108 +114,103 @@ export function Pricing() {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.2 }}
-                            className="flex items-center justify-center gap-4"
+                            className="flex items-center justify-center gap-6"
                         >
-                            <Label htmlFor="billing-mode" className={cn("text-sm font-medium cursor-pointer", !isAnnual ? "text-foreground" : "text-muted-foreground")}>Monthly</Label>
+                            <span className={cn("text-base font-medium cursor-pointer transition-colors", !isAnnual ? "text-[#1A1A1A]" : "text-[#1A1A1A]/40")} onClick={() => setIsAnnual(false)}>Monthly</span>
                             <Switch
                                 id="billing-mode"
                                 checked={isAnnual}
                                 onCheckedChange={setIsAnnual}
+                                className="data-[state=checked]:bg-[#3A4D39]"
                             />
-                            <Label htmlFor="billing-mode" className={cn("text-sm font-medium cursor-pointer", isAnnual ? "text-foreground" : "text-muted-foreground")}>
-                                Annual <span className="ml-1.5 inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">Save 20%</span>
-                            </Label>
+                            <span className={cn("text-base font-medium cursor-pointer transition-colors flex items-center gap-2", isAnnual ? "text-[#1A1A1A]" : "text-[#1A1A1A]/40")} onClick={() => setIsAnnual(true)}>
+                                Annual
+                                <span className="inline-flex items-center rounded-full bg-[#E3E8D3] px-2.5 py-0.5 text-xs font-bold text-[#3A4D39]">
+                                    Save 20%
+                                </span>
+                            </span>
                         </motion.div>
                     </div>
 
-                    <div className="grid gap-8 lg:grid-cols-3 lg:gap-8">
+                    <div className="grid gap-8 lg:grid-cols-3 lg:gap-8 max-w-7xl mx-auto">
                         {TIERS.map((tier, index) => (
                             <motion.div
                                 key={tier.id}
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.1 * (index + 1) }}
+                                className="h-full"
                             >
-                                <Card
+                                <div
                                     className={cn(
-                                        "relative flex h-full flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-xl",
-                                        tier.id === 'pro' ? "border-primary shadow-2xl shadow-primary/20 scale-105 z-10" : "border-border shadow-soft"
+                                        "relative flex h-full flex-col p-8 rounded-[2rem] transition-all duration-300 hover:shadow-xl border",
+                                        tier.id === 'pro'
+                                            ? "bg-[#1A1A1A] text-white border-[#1A1A1A] scale-105 shadow-2xl z-10"
+                                            : "bg-[#FAFAFA] text-[#1A1A1A] border-[#1A1A1A]/5 hover:border-[#1A1A1A]/10"
                                     )}
                                 >
                                     {tier.id === 'pro' && (
-                                        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent pointer-events-none" />
+                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#E3E8D3] text-[#3A4D39] text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full shadow-lg whitespace-nowrap">
+                                            Most Popular
+                                        </div>
                                     )}
 
-                                    <CardHeader className={cn("pb-4", tier.id === 'pro' && "bg-primary/5")}>
-                                        <div className="flex items-center justify-between gap-2">
-                                            <div>
-                                                <CardTitle className={cn("text-xl", tier.id === 'pro' && "text-primary")}>{tier.name}</CardTitle>
-                                                <CardDescription className="mt-1.5">{tier.description}</CardDescription>
-                                            </div>
-                                            {tier.badge && (
-                                                <Badge
-                                                    variant={tier.id === 'pro' ? 'default' : 'secondary'}
-                                                    className={cn("text-xs text-nowrap shadow-sm", tier.id === 'pro' && "bg-primary text-primary-foreground")}
-                                                >
-                                                    {tier.badge}
-                                                </Badge>
-                                            )}
-                                        </div>
-                                    </CardHeader>
+                                    <div className="mb-8">
+                                        <h3 className={cn("text-2xl font-serif font-bold mb-2", tier.id === 'pro' ? "text-white" : "text-[#1A1A1A]")}>{tier.name}</h3>
+                                        <p className={cn("text-sm leading-relaxed opacity-60", tier.id === 'pro' ? "text-white" : "text-[#1A1A1A]")}>{tier.description}</p>
+                                    </div>
 
-                                    <CardContent className="flex flex-1 flex-col space-y-6 pt-6">
+                                    <div className="mb-8">
                                         <div className="flex items-baseline gap-1">
-                                            <span className="text-4xl font-bold tracking-tight">
+                                            <span className="text-5xl font-serif font-bold tracking-tight">
                                                 {isAnnual && tier.annualPriceDisplay ? tier.annualPriceDisplay : tier.priceDisplay}
                                             </span>
                                             {tier.price > 0 && (
-                                                <span className="text-muted-foreground font-medium">
+                                                <span className="opacity-60 font-medium">
                                                     /{isAnnual ? 'year' : 'month'}
                                                 </span>
                                             )}
                                         </div>
+                                    </div>
 
-                                        {tier.highlight && (
-                                            <div className="rounded-lg bg-secondary/50 p-3 text-sm text-secondary-foreground border border-secondary">
-                                                <span className="font-medium">✨ {tier.highlight}</span>
-                                            </div>
+                                    <div className="flex-1 mb-8">
+                                        <div className="text-sm font-bold uppercase tracking-widest opacity-40 mb-6">Includes</div>
+                                        <ul className="space-y-4">
+                                            {tier.features.map((feature) => (
+                                                <li key={`${tier.id}-${feature}`} className="flex items-start gap-3 text-sm">
+                                                    <div className={cn(
+                                                        "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full flex-shrink-0",
+                                                        tier.id === 'pro' ? "bg-[#E3E8D3] text-[#1A1A1A]" : "bg-[#1A1A1A]/5 text-[#1A1A1A]"
+                                                    )}>
+                                                        <Check className="h-3 w-3" />
+                                                    </div>
+                                                    <span className="opacity-80 leading-tight">{feature}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+
+                                    <Button
+                                        className={cn(
+                                            "w-full h-14 rounded-full text-base font-bold transition-all hover:scale-[1.02]",
+                                            tier.id === 'pro'
+                                                ? "bg-[#E3E8D3] text-[#1A1A1A] hover:bg-[#E3E8D3]/90"
+                                                : "bg-[#1A1A1A] text-white hover:bg-[#1A1A1A]/90"
                                         )}
-
-                                        <div className="flex-1">
-                                            <div className="text-sm font-medium mb-4 text-foreground/80">Includes:</div>
-                                            <ul className="space-y-3 text-sm">
-                                                {tier.features.map((feature) => (
-                                                    <li key={`${tier.id}-${feature}`} className="flex items-start gap-3">
-                                                        <div className={cn(
-                                                            "mt-0.5 flex h-5 w-5 items-center justify-center rounded-full",
-                                                            tier.id === 'pro' ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-                                                        )}>
-                                                            <Check className="h-3 w-3" />
-                                                        </div>
-                                                        <span className="text-muted-foreground leading-tight">{feature}</span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-
-                                        <Button
-                                            className={cn(
-                                                "w-full h-12 text-base font-semibold shadow-md transition-all hover:scale-[1.02]",
-                                                tier.id === 'pro' && "shadow-primary/25 hover:shadow-primary/40"
-                                            )}
-                                            variant={tier.id === 'free' ? 'outline' : 'default'}
-                                            onClick={() => handleSubscribe(tier)}
-                                        >
-                                            {tier.buttonText}
-                                            <ArrowRight className="ml-2 h-4 w-4" />
-                                        </Button>
-                                    </CardContent>
-                                </Card>
+                                        onClick={() => handleSubscribe(tier)}
+                                    >
+                                        {tier.buttonText}
+                                        <ArrowRight className="ml-2 h-4 w-4" />
+                                    </Button>
+                                </div>
                             </motion.div>
                         ))}
                     </div>
                 </div>
-            </div>
+            </main>
+
+            <LandingFooter />
         </div>
     )
 }
+
