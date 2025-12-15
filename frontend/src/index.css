@@ -108,10 +108,7 @@
     @apply border-border;
   }
 
-  /* Force serif font for bold/semibold text per user request, but allow opting out with font-sans */
-  :not(.font-sans):is(.font-bold, .font-semibold, strong, b) {
-    font-family: 'Playfair Display', serif;
-  }
+
 
   html,
   body {

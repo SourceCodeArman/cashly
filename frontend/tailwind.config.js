@@ -8,7 +8,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        serif: ['ui-serif', 'Georgia', 'Cambria', '"Times New Roman"', 'Times', 'serif'],
+        serif: ['"Playfair Display"', 'ui-serif', 'Georgia', 'Cambria', '"Times New Roman"', 'Times', 'serif'],
       },
       colors: {
         border: 'hsl(var(--border))',
