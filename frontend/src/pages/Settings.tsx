@@ -13,6 +13,7 @@ import { SecuritySettings } from '@/components/settings/SecuritySettings'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { authService } from '@/services/authService'
 import { toast } from 'sonner'
+import { PageHeader } from "@/components/PageHeader"
 
 function ThemeSelector() {
   const { theme, setTheme } = useTheme()
@@ -107,12 +108,10 @@ export function Settings() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">
-          Manage your account settings and preferences
-        </p>
-      </div>
+      <PageHeader
+        title="Settings"
+        description="Manage your account settings and preferences"
+      />
 
       {/* Settings Tabs */}
       <div className="relative overflow-hidden">

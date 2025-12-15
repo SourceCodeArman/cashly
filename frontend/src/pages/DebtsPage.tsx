@@ -17,6 +17,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { PageHeader } from "@/components/PageHeader"
 
 export default function DebtsPage() {
     const { data: debts, isLoading } = useDebts();
@@ -50,18 +51,15 @@ export default function DebtsPage() {
 
     return (
         <div className="container mx-auto py-8 space-y-8">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Debt Management</h1>
-                    <p className="text-muted-foreground mt-1">
-                        Track your liabilities and optimize your payoff strategy.
-                    </p>
-                </div>
+            <PageHeader
+                title="Debt Management"
+                description="Track your liabilities and optimize your payoff strategy."
+            >
                 <Button onClick={handleAddDebt}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Debt
                 </Button>
-            </div>
+            </PageHeader>
 
             <DebtSummaryCard />
 

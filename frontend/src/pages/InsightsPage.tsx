@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { Insight, InsightSummary } from '@/types/insight.types';
 import { insightService } from '@/services/insightService';
+import { PageHeader } from "@/components/PageHeader"
 
 export default function InsightsPage() {
     const [insights, setInsights] = useState<Insight[]>([]);
@@ -68,21 +69,16 @@ export default function InsightsPage() {
     return (
         <div className="container mx-auto py-6 px-4 max-w-5xl">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold flex items-center gap-2">
-                        <Lightbulb className="h-6 w-6 text-primary" />
-                        Smart Insights
-                    </h1>
-                    <p className="text-muted-foreground mt-1">
-                        Personalized recommendations based on your financial data
-                    </p>
-                </div>
+            {/* Header */}
+            <PageHeader
+                title="Smart Insights"
+                description="Personalized recommendations based on your financial data"
+            >
                 <Button onClick={handleGenerate} disabled={loading}>
                     <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                     Refresh Insights
                 </Button>
-            </div>
+            </PageHeader>
 
             {/* Summary Cards */}
             {summary && (

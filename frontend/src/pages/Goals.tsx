@@ -25,6 +25,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { SavingsRulesManager } from '@/components/goals/SavingsRulesManager'
+import { PageHeader } from "@/components/PageHeader"
 
 const createGoalSchema = z.object({
   name: z.string().min(1, 'Goal name is required'),
@@ -118,13 +119,11 @@ export function Goals() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Goals</h1>
-          <p className="text-muted-foreground">
-            Track your savings goals and monitor your progress
-          </p>
-        </div>
+      {/* Page Header */}
+      <PageHeader
+        title="Goals"
+        description="Track your savings goals and monitor your progress"
+      >
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-gradient-accent">
@@ -187,7 +186,7 @@ export function Goals() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageHeader>
 
       {/* Active Goals */}
       <div className="space-y-4">

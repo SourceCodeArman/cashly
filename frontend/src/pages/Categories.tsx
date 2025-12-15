@@ -28,6 +28,7 @@ import { CategoryFormDialog } from '@/components/categories/CategoryFormDialog'
 import { CategoryRulesDialog } from '@/components/categories/CategoryRulesDialog'
 import { PaywallModal } from '@/components/paywall/PaywallModal'
 import { getCategoryIcon } from '@/components/categories/IconPicker'
+import { PageHeader } from "@/components/PageHeader"
 
 
 export function Categories() {
@@ -117,18 +118,16 @@ export function Categories() {
     <>
       <div className="space-y-6">
         {/* Page Header */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight">Categories</h1>
-            <p className="text-muted-foreground">
-              Organize your transactions with custom categories and automated rules
-            </p>
-          </div>
+        {/* Page Header */}
+        <PageHeader
+          title="Categories"
+          description="Organize your transactions with custom categories and automated rules"
+        >
           <Button onClick={handleCreateCategory}>
             <Plus className="mr-2 h-4 w-4" />
             Add Category
           </Button>
-        </div>
+        </PageHeader>
 
         {/* Default Categories */}
         <div className="space-y-4">

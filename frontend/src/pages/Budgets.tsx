@@ -44,6 +44,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import type { Budget, CreateBudgetForm } from '@/types'
+import { PageHeader } from "@/components/PageHeader"
 
 const createBudgetSchema = z.object({
   category: z.string().min(1, 'Category is required'),
@@ -118,7 +119,7 @@ export function Budgets() {
       const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate())
       // Use current period type or default to 'monthly'
       const periodType = watchedPeriodType || 'monthly'
-      
+
       if (isAutoCalculatedPeriod(periodType)) {
         // Auto-calculate for non-custom periods
         const { periodStart, periodEnd } = calculatePeriodDates(periodType, todayLocal)
@@ -131,7 +132,7 @@ export function Budgets() {
         setCreateValue('periodStart', formatDateForAPI(todayLocal), { shouldValidate: false })
         setCreateValue('periodEnd', formatDateForAPI(todayLocal), { shouldValidate: false })
       }
-      
+
       lastPeriodTypeRef.current = periodType
       setTimeout(() => {
         createUpdatingRef.current = null
@@ -149,11 +150,11 @@ export function Budgets() {
   // Track period type changes (create form)
   useEffect(() => {
     const periodTypeChanged = lastPeriodTypeRef.current !== watchedPeriodType && lastPeriodTypeRef.current !== null
-    
+
     if (periodTypeChanged && createDialogOpen && createInitializedRef.current) {
       lastChangedFieldRef.current = 'type'
     }
-    
+
     lastPeriodTypeRef.current = watchedPeriodType || null
   }, [watchedPeriodType, createDialogOpen])
 
@@ -232,11 +233,11 @@ export function Budgets() {
   const editLastPeriodTypeRef = useRef<string | null>(null)
   useEffect(() => {
     const periodTypeChanged = editLastPeriodTypeRef.current !== watchedEditPeriodType && editLastPeriodTypeRef.current !== null
-    
+
     if (periodTypeChanged && editDialogOpen) {
       editLastChangedFieldRef.current = 'type'
     }
-    
+
     editLastPeriodTypeRef.current = watchedEditPeriodType || null
   }, [watchedEditPeriodType, editDialogOpen])
 
@@ -281,7 +282,7 @@ export function Budgets() {
       // Parse the end date using local date components to avoid timezone issues
       const endDateMatch = watchedEditPeriodEnd.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
       if (!endDateMatch) return
-      
+
       const [, year, month, day] = endDateMatch
       const endDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
       // Calculate start date by working backwards from end date
@@ -399,13 +400,11 @@ export function Budgets() {
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Budgets</h1>
-          <p className="text-muted-foreground">
-            Set spending limits by category and track your budget usage
-          </p>
-        </div>
+      {/* Page Header */}
+      <PageHeader
+        title="Budgets"
+        description="Set spending limits by category and track your budget usage"
+      >
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-gradient-accent" onClick={() => resetCreateForm()}>
@@ -564,7 +563,7 @@ export function Budgets() {
             </form>
           </DialogContent>
         </Dialog>
-      </div>
+      </PageHeader>
 
       {/* Budgets List */}
       {isLoading ? (
@@ -651,8 +650,8 @@ export function Budgets() {
                               percentageUsed >= 100
                                 ? 'hsl(var(--destructive))'
                                 : percentageUsed >= alertThreshold
-                                ? 'rgb(234, 179, 8)'
-                                : 'hsl(var(--primary))',
+                                  ? 'rgb(234, 179, 8)'
+                                  : 'hsl(var(--primary))',
                           }}
                         />
                       </div>
@@ -663,9 +662,8 @@ export function Budgets() {
                     <div>
                       <div className="text-sm text-muted-foreground">Spent</div>
                       <div
-                        className={`text-lg font-semibold ${
-                          usage?.isOverBudget ? 'text-destructive' : ''
-                        }`}
+                        className={`text-lg font-semibold ${usage?.isOverBudget ? 'text-destructive' : ''
+                          }`}
                       >
                         {formatCurrency(spent)}
                       </div>
@@ -673,9 +671,8 @@ export function Budgets() {
                     <div className="text-right">
                       <div className="text-sm text-muted-foreground">Remaining</div>
                       <div
-                        className={`text-lg font-semibold ${
-                          remaining < 0 ? 'text-destructive' : ''
-                        }`}
+                        className={`text-lg font-semibold ${remaining < 0 ? 'text-destructive' : ''
+                          }`}
                       >
                         {formatCurrency(Math.max(0, remaining))}
                       </div>
@@ -796,34 +793,34 @@ export function Budgets() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-periodStart">Period Start</Label>
-                  <DatePicker
-                    value={watchEdit('periodStart')}
-                    onChange={(value) => {
-                      editLastChangedFieldRef.current = 'start'
-                      setEditValue('periodStart', value)
-                    }}
-                    placeholder="Select start date"
-                  />
-                  {editErrors.periodStart && (
-                    <p className="text-sm text-destructive">{editErrors.periodStart.message}</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="edit-periodEnd">Period End</Label>
-                  <DatePicker
-                    value={watchEdit('periodEnd')}
-                    onChange={(value) => {
-                      editLastChangedFieldRef.current = 'end'
-                      setEditValue('periodEnd', value)
-                    }}
-                    placeholder="Select end date"
-                  />
-                  {editErrors.periodEnd && (
-                    <p className="text-sm text-destructive">{editErrors.periodEnd.message}</p>
-                  )}
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-periodStart">Period Start</Label>
+                <DatePicker
+                  value={watchEdit('periodStart')}
+                  onChange={(value) => {
+                    editLastChangedFieldRef.current = 'start'
+                    setEditValue('periodStart', value)
+                  }}
+                  placeholder="Select start date"
+                />
+                {editErrors.periodStart && (
+                  <p className="text-sm text-destructive">{editErrors.periodStart.message}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-periodEnd">Period End</Label>
+                <DatePicker
+                  value={watchEdit('periodEnd')}
+                  onChange={(value) => {
+                    editLastChangedFieldRef.current = 'end'
+                    setEditValue('periodEnd', value)
+                  }}
+                  placeholder="Select end date"
+                />
+                {editErrors.periodEnd && (
+                  <p className="text-sm text-destructive">{editErrors.periodEnd.message}</p>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-between">

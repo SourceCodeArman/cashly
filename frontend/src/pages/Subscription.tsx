@@ -14,6 +14,7 @@ import { formatDate, cn } from '@/lib/utils'
 import type { BillingCycle, SubscriptionTier } from '@/types'
 import { subscriptionService } from '@/services/subscriptionService'
 import { toast } from 'sonner'
+import { PageHeader } from "@/components/PageHeader"
 
 const FALLBACK_TIERS: SubscriptionTier[] = [
   {
@@ -259,10 +260,10 @@ export function Subscription() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Subscription</h1>
-        <p className="text-muted-foreground">Manage your subscription and billing</p>
-      </div>
+      <PageHeader
+        title="Subscription"
+        description="Manage your subscription and billing"
+      />
 
       {!canUpgrade && (
         <div className="rounded-md border border-dashed border-warning/40 bg-warning/10 p-4 text-sm text-warning-foreground">

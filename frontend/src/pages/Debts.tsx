@@ -9,6 +9,7 @@ import { DebtStrategy } from '@/components/debts/DebtStrategy'
 import { PaymentHistory } from '@/components/debts/PaymentHistory'
 import { DebtModal } from '@/components/debts/DebtModal'
 import { Loader2 } from 'lucide-react'
+import { PageHeader } from "@/components/PageHeader"
 
 import type { DebtAccount } from '@/types/debt.types'
 
@@ -35,19 +36,16 @@ export default function Debts() {
 
     return (
         <div className="flex-1 space-y-4 p-8 pt-6">
-            <div className="flex items-center justify-between space-y-2">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight">Debt Management</h2>
-                    <p className="text-muted-foreground">
-                        Track, strategize, and payoff your debts.
-                    </p>
-                </div>
+            <PageHeader
+                title="Debt Management"
+                description="Track, strategize, and payoff your debts."
+            >
                 <div className="flex items-center space-x-2">
                     <Button onClick={() => setIsCreateModalOpen(true)}>
                         <Plus className="mr-2 h-4 w-4" /> Add Debt
                     </Button>
                 </div>
-            </div>
+            </PageHeader>
 
             <DebtSummaryCard />
 

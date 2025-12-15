@@ -35,6 +35,7 @@ import { toast } from 'sonner'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { Receipt } from 'lucide-react'
+import { PageHeader } from "@/components/PageHeader"
 
 export function Transactions() {
   const [search, setSearch] = useState('')
@@ -292,44 +293,40 @@ export function Transactions() {
   return (
     <div className="space-y-6" >
       {/* Page Header */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
-            <p className="text-muted-foreground">
-              View and manage your transaction history
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={runRecurringDetection}
-              disabled={runningRecurringDetection}
-            >
-              {runningRecurringDetection ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Repeat className="h-4 w-4 mr-2" />
-              )}
-              Detect Recurring
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={runTransferDetection}
-              disabled={runningTransferDetection}
-            >
-              {runningTransferDetection ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <ArrowLeftRight className="h-4 w-4 mr-2" />
-              )}
-              Detect Transfers
-            </Button>
-          </div>
+      {/* Page Header */}
+      <PageHeader
+        title="Transactions"
+        description="View and manage your transaction history"
+      >
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={runRecurringDetection}
+            disabled={runningRecurringDetection}
+          >
+            {runningRecurringDetection ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Repeat className="h-4 w-4 mr-2" />
+            )}
+            Detect Recurring
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={runTransferDetection}
+            disabled={runningTransferDetection}
+          >
+            {runningTransferDetection ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <ArrowLeftRight className="h-4 w-4 mr-2" />
+            )}
+            Detect Transfers
+          </Button>
         </div>
-      </div >
+      </PageHeader>
 
       {/* Stats Cards */}
       < div className="grid gap-6 md:grid-cols-3" >

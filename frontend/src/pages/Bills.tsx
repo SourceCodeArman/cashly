@@ -26,6 +26,7 @@ import { EmptyState } from '@/components/common/EmptyState'
 import { Calendar as CalendarIcon } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { toast } from 'sonner'
+import { PageHeader } from "@/components/PageHeader"
 
 export default function Bills() {
     const [searchParams, setSearchParams] = useSearchParams()
@@ -178,13 +179,11 @@ export default function Bills() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Bills & Recurring Payments</h1>
-                    <p className="text-muted-foreground">
-                        Manage your bills, subscriptions, and automatically detected recurring payments.
-                    </p>
-                </div>
+            {/* Header */}
+            <PageHeader
+                title="Bills & Recurring Payments"
+                description="Manage your bills, subscriptions, and automatically detected recurring payments."
+            >
                 {activeTab === 'manual' && (
                     <Button onClick={() => setShowAddModal(true)}>
                         <Plus className="mr-2 h-4 w-4" /> Add Bill
@@ -205,7 +204,7 @@ export default function Bills() {
                         )}
                     </Button>
                 )}
-            </div>
+            </PageHeader>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
                 <TabsList className="grid w-full max-w-md grid-cols-2">

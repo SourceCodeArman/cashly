@@ -11,6 +11,7 @@ import { analyticsService } from '@/services/analyticsService';
 import { format, subDays } from 'date-fns';
 import { useSubscriptions } from '@/hooks/useSubscription';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from "@/components/PageHeader"
 
 import { PremiumGuard } from '@/components/common/PremiumGuard';
 import { Download } from 'lucide-react';
@@ -139,13 +140,10 @@ export default function Analytics() {
 
     return (
         <div className="container mx-auto p-6 space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
-                    <p className="text-muted-foreground">
-                        Visualize your financial data and spending patterns
-                    </p>
-                </div>
+            <PageHeader
+                title="Analytics"
+                description="Visualize your financial data and spending patterns"
+            >
                 {hasProAccess && (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -190,7 +188,7 @@ export default function Analytics() {
                         </DropdownMenuContent>
                     </DropdownMenu>
                 )}
-            </div>
+            </PageHeader>
 
             {/* Premium Analytics Section */}
             <PremiumGuard

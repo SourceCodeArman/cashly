@@ -13,6 +13,7 @@ import { formatRelativeTime } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import { useState } from 'react'
 import { NotificationPreferencesModal } from '@/components/notifications/NotificationPreferencesModal'
+import { PageHeader } from "@/components/PageHeader"
 
 export function Notifications() {
   const { data: notificationsData, isLoading } = useNotifications()
@@ -76,13 +77,11 @@ export function Notifications() {
       />
 
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Notifications</h1>
-          <p className="text-muted-foreground">
-            View and manage your notifications
-          </p>
-        </div>
+      {/* Page Header */}
+      <PageHeader
+        title="Notifications"
+        description="View and manage your notifications"
+      >
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setShowPreferences(true)}>
             <Settings className="mr-2 h-4 w-4" />
@@ -95,7 +94,7 @@ export function Notifications() {
             </Button>
           )}
         </div>
-      </div>
+      </PageHeader>
 
       {/* Notifications List */}
       {notifications.length === 0 ? (

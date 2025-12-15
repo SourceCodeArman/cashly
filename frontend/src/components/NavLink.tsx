@@ -25,9 +25,9 @@ export function NavLink({ to, icon: Icon, label, onClick }: NavLinkProps) {
           ? cn(
             'relative flex h-9 w-full items-center rounded-lg pl-2 pr-1 text-sm font-medium transition-colors duration-500 ease-in-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
           )
-          : cn('relative flex h-9 w-full items-center justify-center rounded-lg text-sm font-medium transition-colors duration-500 ease-in-out hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'),
+          : cn('relative flex h-9 w-full items-center justify-center rounded-lg text-sm font-medium transition-colors duration-500 ease-in-out'),
 
-        isActive ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground'
+        isActive ? 'bg-sidebar-primary text-sidebar-primary-foreground ' : 'text-sidebar-foreground hover:bg-sidebar-primary hover:text-sidebar-primary-foreground'
       )}
       title={!sidebarOpen ? label : undefined}
     >
