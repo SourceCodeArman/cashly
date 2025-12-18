@@ -37,6 +37,8 @@ pytest-django==4.7.0
 factory-boy==3.3.0
 pytest-cov==4.1.0
 
+google-genai
+
 # Development Tools
 django-debug-toolbar>=4.0.0
 

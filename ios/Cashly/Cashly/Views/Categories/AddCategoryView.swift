@@ -221,7 +221,7 @@ struct AddCategoryView: View {
             Text(categoryType.capitalized)
               .font(.subheadline)
               .fontWeight(.medium)
-              .foregroundStyle(type == categoryType ? .white : AppTheme.text)
+              .foregroundStyle(type == categoryType ? AppTheme.background : AppTheme.text)
               .padding(.horizontal, 20)
               .padding(.vertical, 12)
               .background(
@@ -686,7 +686,7 @@ struct IconPickerView: View {
                         .font(.system(size: 22))
                         .foregroundStyle(
                           selectedIcon == icon.0
-                            ? .white
+                            ? AppTheme.background
                             : Color(hex: selectedColor)
                         )
                     }

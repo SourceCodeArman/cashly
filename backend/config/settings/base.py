@@ -37,7 +37,7 @@ INSTALLED_APPS = [
     "drf_yasg",
     "storages",
     "channels",
-    # Local apps
+    # Local apps    "apps.core",
     "apps.accounts",
     "apps.transactions",
     "apps.goals",
@@ -50,7 +50,11 @@ INSTALLED_APPS = [
     "apps.bills",
     "apps.debts",
     "apps.marketing",
+    "apps.ai_assistant",
 ]
+
+# Feature Flags
+ENABLE_SUBSCRIPTION = config("ENABLE_SUBSCRIPTION", default=True, cast=bool)
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -235,6 +239,11 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+AUTHENTICATION_BACKENDS = [
+    "apps.accounts.backends.PhoneOrEmailBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
 # Internationalization
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "America/Los_Angeles"  # PST/PDT
@@ -409,6 +418,10 @@ PLAID_CATEGORIZATION_OVERWRITE_EXISTING = config(
 OLLAMA_BASE_URL = config("OLLAMA_BASE_URL", default="http://localhost:11434")
 OLLAMA_MODEL = config("OLLAMA_MODEL", default="llama3.1:8b")
 
+# Gemini Configuration (for cloud AI)
+GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
+GEMINI_MODEL = config("GEMINI_MODEL", default="gemin-2.0-flash")
+
 # Frontend URL (for password reset links, etc.)
 FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:3000")
 
@@ -473,6 +486,11 @@ LOGGING = {
         },
     },
 }
+
+# Supabase Configuration
+SUPABASE_URL = config("SUPABASE_URL", default="")
+SUPABASE_PUBLISHABLE_KEY = config("SUPABASE_PUBLISHABLE_KEY", default="")
+SUPABASE_SECRET_KEY = config("SUPABASE_SECRET_KEY", default="")
 
 
 # Create logs directory if it doesn't exist

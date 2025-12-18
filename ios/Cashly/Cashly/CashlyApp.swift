@@ -13,10 +13,23 @@ struct CashlyApp: App {
         MainContainerView()
           .environmentObject(authManager)
           .preferredColorScheme(isDarkMode ? .dark : .light)
+          .onOpenURL { url in
+              SupabaseManager.shared.handle(url: url)
+          }
+      } else if authManager.requiresMFA {
+        MFAVerificationView()
+          .environmentObject(authManager)
+          .preferredColorScheme(isDarkMode ? .dark : .light)
+          .onOpenURL { url in
+              SupabaseManager.shared.handle(url: url)
+          }
       } else {
         LoginView()
           .environmentObject(authManager)
           .preferredColorScheme(isDarkMode ? .dark : .light)
+          .onOpenURL { url in
+              SupabaseManager.shared.handle(url: url)
+          }
       }
     }
   }

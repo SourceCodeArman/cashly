@@ -7,7 +7,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinLengthValidator, MaxLengthValidator
 from django.utils import timezone
-from decimal import Decimal
+
 
 User = get_user_model()
 
@@ -166,7 +166,7 @@ class Transaction(models.Model):
     )
     date = models.DateField()
     merchant_name = models.CharField(
-        max_length=200, validators=[MinLengthValidator(2), MaxLengthValidator(200)]
+        max_length=255, validators=[MinLengthValidator(2), MaxLengthValidator(200)]
     )
     description = models.TextField(blank=True)
     category = models.ForeignKey(
@@ -176,7 +176,7 @@ class Transaction(models.Model):
         blank=True,
         related_name="transactions",
     )
-    subcategory = models.CharField(max_length=100, blank=True, null=True)
+    subcategory = models.CharField(max_length=255, blank=True, null=True)
     tags = models.JSONField(default=list, blank=True, help_text="Array of tag strings")
     notes = models.TextField(blank=True, null=True)
     is_recurring = models.BooleanField(default=False)

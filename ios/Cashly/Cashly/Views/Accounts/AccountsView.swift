@@ -15,7 +15,7 @@ struct AccountsView: View {
 
   var body: some View {
 
-    ZStack {
+    ZStack(alignment: .top) {
       AppTheme.background
         .ignoresSafeArea()
 
@@ -353,7 +353,7 @@ struct EmptyAccountsView: View {
         }
       }
       .font(.headline)
-      .foregroundStyle(.white)
+      .foregroundStyle(AppTheme.background)
       .frame(height: 50)
       .frame(maxWidth: .infinity)
       .background(AppTheme.primary)

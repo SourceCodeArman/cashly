@@ -253,10 +253,103 @@ class DebtAccountViewSet(viewsets.ModelViewSet):
 
     def retrieve(self, request, *args, **kwargs):
         """Retrieve debt account with computed fields."""
-        instance = self.get_object()
-        serializer = self.get_serializer(instance)
+        try:
+            instance = self.get_object()
+            serializer = self.get_serializer(instance)
+            return Response({"success": True, "data": serializer.data})
+        except Exception:
+            # If not found in DebtAccount, check if it's a Plaid Account
+            # This allows the details view to work for Plaid-synced liabilities
+            from apps.accounts.models import Account
+            from apps.accounts.liability_sync import (
+                sync_liabilities_for_account,
+                get_liabilities_for_display,
+            )
+            from django.shortcuts import get_object_or_404
 
-        return Response({"success": True, "data": serializer.data})
+            # Get the ID from kwargs
+            pk = kwargs.get("pk")
+
+            # Try to get the Plaid account
+            account = get_object_or_404(
+                Account.objects.for_user(request.user),
+                pk=pk,
+            )
+
+            # Verify it's a liability type
+            if account.account_type not in ["credit_card", "loan", "mortgage"]:
+                raise
+
+            # Sync liabilities
+            sync_liabilities_for_account(account, force_refresh=False)
+
+            # Get formatted data
+            liability_data = get_liabilities_for_display(account)
+
+            # Construct response to match DebtAccountSerializer structure
+            debt_data = {
+                "debt_id": str(account.account_id),
+                "name": account.custom_name
+                or f"{account.institution_name} {account.account_number_masked}",
+                "debt_type": account.account_type,
+                "current_balance": float(account.balance),
+                "original_balance": float(account.balance),  # Best guess
+                "creditor_name": account.institution_name,
+                "account_number_masked": account.account_number_masked,
+                "status": "active",
+                "is_active": True,
+                "is_synced": True,
+                "opened_date": None,  # Will be filled if available
+                "target_payoff_date": None,
+                "notes": "",
+                "created_at": account.created_at,
+                "updated_at": account.updated_at,
+            }
+
+            # Add liability-specific fields
+            if account.account_type == "credit_card":
+                debt_data.update(
+                    {
+                        "interest_rate": float(liability_data.get("apr") or 0.0),
+                        "minimum_payment": float(
+                            liability_data.get("minimum_payment") or 0.0
+                        ),
+                        "next_due_date": liability_data.get("next_payment_due_date"),
+                        "days_until_due": None,  # Could calculate
+                        "last_payment_date": liability_data.get("last_payment_date"),
+                        "last_payment_amount": float(
+                            liability_data.get("last_payment_amount") or 0.0
+                        )
+                        if liability_data.get("last_payment_amount")
+                        else None,
+                    }
+                )
+            else:  # loans
+                debt_data.update(
+                    {
+                        "interest_rate": float(
+                            liability_data.get("interest_rate") or 0.0
+                        ),
+                        "minimum_payment": float(
+                            liability_data.get("minimum_payment")
+                            or liability_data.get("payment_amount")
+                            or 0.0
+                        ),
+                        "next_due_date": liability_data.get("next_payment_due_date"),
+                        "opened_date": liability_data.get("origination_date"),
+                        "target_payoff_date": liability_data.get("maturity_date"),
+                    }
+                )
+
+            # Calculate monthly interest approximation for display
+            if debt_data.get("interest_rate") and debt_data.get("current_balance"):
+                rate = Decimal(str(debt_data["interest_rate"])) / 100
+                balance = Decimal(str(debt_data["current_balance"]))
+                debt_data["monthly_interest"] = float((balance * rate) / 12)
+            else:
+                debt_data["monthly_interest"] = 0.0
+
+            return Response({"success": True, "data": debt_data})
 
     def update(self, request, *args, **kwargs):
         """Update debt account."""

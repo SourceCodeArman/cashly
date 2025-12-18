@@ -1,6 +1,7 @@
 """
 URL configuration for Cashly project.
 """
+
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
@@ -12,7 +13,7 @@ from rest_framework import permissions
 schema_view = get_schema_view(
     openapi.Info(
         title="Cashly API",
-        default_version='v1',
+        default_version="v1",
         description="Cashly Personal Finance Management API",
         terms_of_service="https://cashly.com/terms/",
         contact=openapi.Contact(email="contact@cashly.com"),
@@ -23,37 +24,45 @@ schema_view = get_schema_view(
 )
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    
+    path("admin/", admin.site.urls),
     # API Documentation
-    path('api/docs/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-    path('api/redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
-    path('api/swagger.json', schema_view.without_ui(cache_timeout=0), name='schema-json'),
-    
+    path(
+        "api/docs/",
+        schema_view.with_ui("swagger", cache_timeout=0),
+        name="schema-swagger-ui",
+    ),
+    path(
+        "api/redoc/", schema_view.with_ui("redoc", cache_timeout=0), name="schema-redoc"
+    ),
+    path(
+        "api/swagger.json", schema_view.without_ui(cache_timeout=0), name="schema-json"
+    ),
     # API v1
-    path('api/v1/auth/', include('apps.accounts.urls')),
-    path('api/v1/accounts/', include('apps.accounts.account_urls')),
-    path('api/v1/transactions/', include('apps.transactions.urls')),
-    path('api/v1/goals/', include('apps.goals.urls')),
-    path('api/v1/budgets/', include('apps.budgets.urls')),
-    path('api/v1/bills/', include('apps.bills.urls')),
-    path('api/v1/debts/', include('apps.debts.urls')),
-    path('api/v1/dashboard/', include('apps.analytics.urls')),
-    path('api/v1/analytics/', include('apps.analytics.urls')),
-    path('api/v1/notifications/', include('apps.notifications.urls')),
-    path('api/v1/subscriptions/', include('apps.subscriptions.urls')),
-    path('api/v1/insights/', include('apps.insights.urls')),
-    path('api/v1/marketing/', include('apps.marketing.urls')),
-    path('api/v1/health/', include('apps.api.urls')),
-    path('api/v1/admin/', include('apps.api.admin_urls')),
+    path("api/v1/auth/", include("apps.accounts.urls")),
+    path("api/v1/accounts/", include("apps.accounts.account_urls")),
+    path("api/v1/transactions/", include("apps.transactions.urls")),
+    path("api/v1/goals/", include("apps.goals.urls")),
+    path("api/v1/budgets/", include("apps.budgets.urls")),
+    path("api/v1/bills/", include("apps.bills.urls")),
+    path("api/v1/debts/", include("apps.debts.urls")),
+    path("api/v1/dashboard/", include("apps.analytics.urls")),
+    path("api/v1/analytics/", include("apps.analytics.urls")),
+    path("api/v1/notifications/", include("apps.notifications.urls")),
+    path("api/v1/subscriptions/", include("apps.subscriptions.urls")),
+    path("api/v1/insights/", include("apps.insights.urls")),
+    path("api/v1/chat/", include("apps.ai_assistant.urls")),
+    path("api/v1/marketing/", include("apps.marketing.urls")),
+    path("api/v1/health/", include("apps.api.urls")),
+    path("api/v1/admin/", include("apps.api.admin_urls")),
 ]
 
 # Django Debug Toolbar URLs (only in development)
 if settings.DEBUG:
     try:
         import debug_toolbar
+
         urlpatterns = [
-            path('__debug__/', include(debug_toolbar.urls)),
+            path("__debug__/", include(debug_toolbar.urls)),
         ] + urlpatterns
     except ImportError:
         pass

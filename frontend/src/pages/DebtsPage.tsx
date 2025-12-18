@@ -101,6 +101,12 @@ export default function DebtsPage() {
                     setIsDebtModalOpen(true);
                 }}
             />
+
+            <div className="mt-8 mb-4 text-center">
+                <p className="text-xs text-muted-foreground">
+                    Disclaimer: The pay button updates your local records only and does not process actual payments with your financial institution.
+                </p>
+            </div>
         </div>
     );
 }

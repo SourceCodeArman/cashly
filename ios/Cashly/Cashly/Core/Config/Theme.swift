@@ -45,12 +45,13 @@ struct AppTheme {
   }
 
   // MARK: - Core Colors
-  static let primary = dynamicColor(light: "0F91BC", dark: "13B5EB")
-  static let background = dynamicColor(light: "F8F9FA", dark: "111821")
-  static let card = dynamicColor(light: "FFFFFF", dark: "1F2837")  // Dark card matches user request
-  static let text = dynamicColor(light: "111827", dark: "F9FAFB")
+  // MARK: - Core Colors
+  static let primary = dynamicColor(light: "1A1A1A", dark: "FDFCF8")  // Charcoal / Cream
+  static let background = dynamicColor(light: "FDFCF8", dark: "1A1A1A")  // Cream / Charcoal
+  static let card = dynamicColor(light: "FDFCF8", dark: "212121")
+  static let text = dynamicColor(light: "1A1A1A", dark: "FDFCF8")
   static let secondaryText = dynamicColor(light: "6B7280", dark: "9CA3AF")
-  static let tabBarBackground = dynamicColor(light: "222B39", dark: "19222D")
+  static let tabBarBackground = dynamicColor(light: "FDFCF8", dark: "1A1A1A")
 
   // MARK: - Semantic Colors
   static let accent = dynamicColor(light: "22C38D", dark: "26D89D")  // Green
@@ -77,6 +78,7 @@ struct AppFont {
   static func title1() -> Font { .system(.title, design: .rounded).weight(.bold) }
   static func title2() -> Font { .system(.title2, design: .rounded).weight(.bold) }
   static func title3() -> Font { .system(.title3, design: .rounded).weight(.semibold) }
+  static func largeTitleSerif() -> Font { .system(size: 36, weight: .bold, design: .serif) }
   static func body() -> Font { .system(.body, design: .default) }
   static func caption() -> Font { .system(.caption, design: .default) }
 }

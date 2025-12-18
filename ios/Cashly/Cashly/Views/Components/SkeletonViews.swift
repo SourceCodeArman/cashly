@@ -89,14 +89,14 @@ struct SkeletonCard: View {
             Spacer()
             SkeletonLine(width: 150, height: 14)
         }
-        .padding(DashboardDesign.cardPadding)
+        .padding(AppTheme.padding)
         .frame(height: height)
         .background(AppTheme.card)
-        .cornerRadius(DashboardDesign.cardCornerRadius)
+        .cornerRadius(AppTheme.cornerRadius)
         .shadow(
-            color: Color.black.opacity(DashboardDesign.shadowOpacity),
-            radius: DashboardDesign.shadowRadius,
-            y: DashboardDesign.shadowY
+            color: Color.black.opacity(0.05),
+            radius: 8,
+            y: 4
         )
     }
 }
@@ -129,7 +129,7 @@ struct SkeletonListRow: View {
 struct DashboardSkeleton: View {
     var body: some View {
         ScrollView {
-            VStack(spacing: DashboardDesign.cardSpacing) {
+            VStack(spacing: AppTheme.padding) {
                 // Net Worth Card Skeleton
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
@@ -155,25 +155,41 @@ struct DashboardSkeleton: View {
                         }
                     }
                 }
-                .padding(DashboardDesign.cardPadding)
-                .cardStyle()
+                .padding(AppTheme.padding)
+                .background(AppTheme.card)
+                .cornerRadius(AppTheme.cornerRadius)
+                .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
                 
-                // Quick Stats Row Skeleton
-                HStack(spacing: 12) {
-                    ForEach(0..<3) { _ in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                SkeletonLine(width: 60, height: 10)
-                                Spacer()
-                                SkeletonCircle(diameter: 16)
+                // Quick Access Section Skeleton
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        SkeletonLine(width: 100, height: 16)
+                        Spacer()
+                        SkeletonCircle(diameter: 20)
+                    }
+                    
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12),
+                        ], spacing: 12
+                    ) {
+                        ForEach(0..<8) { _ in
+                            VStack(spacing: 8) {
+                                SkeletonCircle(diameter: 48)
+                                SkeletonLine(width: 50, height: 10)
+                                    .frame(maxWidth: .infinity)
                             }
-                            SkeletonLine(width: 80, height: 20)
+                            .padding(.vertical, 8)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(DashboardDesign.cardPadding)
-                        .cardStyle()
                     }
                 }
+                .padding(AppTheme.padding)
+                .background(AppTheme.card)
+                .cornerRadius(AppTheme.cornerRadius)
+                .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
                 
                 // Recent Transactions Card Skeleton
                 VStack(alignment: .leading, spacing: 12) {
@@ -198,8 +214,10 @@ struct DashboardSkeleton: View {
                         }
                     }
                 }
-                .padding(DashboardDesign.cardPadding)
-                .cardStyle()
+                .padding(AppTheme.padding)
+                .background(AppTheme.card)
+                .cornerRadius(AppTheme.cornerRadius)
+                .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
                 
                 // Category Spending Card Skeleton
                 VStack(alignment: .leading, spacing: 12) {
@@ -231,8 +249,48 @@ struct DashboardSkeleton: View {
                         }
                     }
                 }
-                .padding(DashboardDesign.cardPadding)
-                .cardStyle()
+                .padding(AppTheme.padding)
+                .background(AppTheme.card)
+                .cornerRadius(AppTheme.cornerRadius)
+                .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+                
+                // Goals Progress Skeleton
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            SkeletonLine(width: 120, height: 16)
+                            SkeletonLine(width: 150, height: 10)
+                        }
+                        Spacer()
+                        SkeletonCircle(diameter: 20)
+                    }
+                    
+                    Divider()
+                    
+                    VStack(spacing: 16) {
+                        ForEach(0..<3) { _ in
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    SkeletonLine(width: 100, height: 14)
+                                    Spacer()
+                                    SkeletonLine(width: 40, height: 10)
+                                }
+                                
+                                SkeletonBox(height: 8, cornerRadius: 4)
+                                
+                                HStack {
+                                    SkeletonLine(width: 60, height: 10)
+                                    Spacer()
+                                    SkeletonLine(width: 60, height: 10)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(AppTheme.padding)
+                .background(AppTheme.card)
+                .cornerRadius(AppTheme.cornerRadius)
+                .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
             }
             .padding()
         }
@@ -250,6 +308,7 @@ struct TransactionListSkeleton: View {
             ForEach(0..<rowCount, id: \.self) { _ in
                 SkeletonListRow()
                     .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
             }
         }
         .listStyle(.plain)
@@ -280,10 +339,10 @@ struct BudgetListSkeleton: View {
                         
                         SkeletonBox(height: 8, cornerRadius: 4)
                     }
-                    .padding()
+                    .padding(AppTheme.padding)
                     .background(AppTheme.card)
-                    .cornerRadius(12)
-                    .shadow(color: Color.black.opacity(0.05), radius: 5, y: 2)
+                    .cornerRadius(AppTheme.cornerRadius)
+                    .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
                 }
             }
             .padding()
@@ -317,27 +376,44 @@ struct AnalyticsChartSkeleton: View {
 struct AccountCardSkeleton: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Header: Name/Number Left, Icon Right
             HStack {
-                SkeletonCircle(diameter: 40)
+                VStack(alignment: .leading, spacing: 4) {
+                    SkeletonLine(width: 120, height: 16)
+                    SkeletonLine(width: 80, height: 12)
+                }
                 Spacer()
-                SkeletonLine(width: 60, height: 12)
+                SkeletonCircle(diameter: 20)
             }
             
-            SkeletonLine(width: 140, height: 16)
-            SkeletonLine(width: 180, height: 28)
+            // Balance
+            SkeletonLine(width: 160, height: 28)
+                .padding(.vertical, 4)
             
             Divider()
             
+            // Info Row
             HStack {
-                SkeletonLine(width: 80, height: 12)
-                Spacer()
                 SkeletonLine(width: 100, height: 12)
+                Spacer()
+                SkeletonBox(width: 60, height: 20, cornerRadius: 4)
+            }
+            
+            // Actions
+            HStack(spacing: 8) {
+                SkeletonBox(width: 80, height: 28, cornerRadius: 8)
+                Spacer()
+                SkeletonCircle(diameter: 16)
             }
         }
-        .padding()
+        .padding(AppTheme.padding)
         .background(AppTheme.card)
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.05), radius: 5, y: 2)
+        .cornerRadius(AppTheme.cornerRadius)
+        .shadow(
+            color: Color.black.opacity(0.05),
+            radius: 8,
+            y: 4
+        )
     }
 }
 
@@ -357,14 +433,16 @@ struct BillListSkeleton: View {
                     
                     VStack(alignment: .trailing, spacing: 4) {
                         SkeletonLine(width: 80, height: 16)
-                        SkeletonLine(width: 70, height: 12)
+                        SkeletonLine(width: 60, height: 12)
                     }
                 }
                 .padding(.vertical, 4)
                 .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden) // Ensure the list background itself is hidden
     }
 }
 
@@ -398,10 +476,10 @@ struct GoalListSkeleton: View {
                             SkeletonLine(width: 70, height: 10)
                         }
                     }
-                    .padding()
+                    .padding(AppTheme.padding)
                     .background(AppTheme.card)
-                    .cornerRadius(12)
-                    .shadow(color: Color.black.opacity(0.05), radius: 5, y: 2)
+                    .cornerRadius(AppTheme.cornerRadius)
+                    .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
                 }
             }
             .padding()
@@ -421,10 +499,10 @@ struct DebtListSkeleton: View {
                     SkeletonLine(width: 160, height: 36)
                 }
                 .frame(maxWidth: .infinity)
-                .padding()
+                .padding(AppTheme.padding)
                 .background(AppTheme.card)
-                .cornerRadius(12)
-                .shadow(color: .black.opacity(0.05), radius: 5, y: 2)
+                .cornerRadius(AppTheme.cornerRadius)
+                .shadow(color: .black.opacity(0.05), radius: 8, y: 4)
                 
                 // Debt List
                 LazyVStack(spacing: 16) {
@@ -452,10 +530,10 @@ struct DebtListSkeleton: View {
                                 SkeletonLine(width: 70, height: 10)
                             }
                         }
-                        .padding()
+                        .padding(AppTheme.padding)
                         .background(AppTheme.card)
-                        .cornerRadius(12)
-                        .shadow(color: Color.black.opacity(0.05), radius: 5, y: 2)
+                        .cornerRadius(AppTheme.cornerRadius)
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
                     }
                 }
             }
@@ -478,6 +556,7 @@ struct CategoryListSkeleton: View {
                 }
                 .padding(.vertical, 4)
                 .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
         }
         .listStyle(.plain)
@@ -489,23 +568,43 @@ struct CategoryListSkeleton: View {
 struct InsightListSkeleton: View {
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: 16) {
-                ForEach(0..<4) { _ in
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            SkeletonCircle(diameter: 40)
-                            Spacer()
-                            SkeletonLine(width: 60, height: 12)
+            VStack(spacing: 20) {
+                // Summary Cards Skeleton
+                HStack(spacing: 12) {
+                    ForEach(0..<2) { _ in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                SkeletonCircle(diameter: 24)
+                                Spacer()
+                                SkeletonLine(width: 40, height: 20) // Value
+                            }
+                            SkeletonLine(width: 60, height: 12) // Title
                         }
-                        
-                        SkeletonLine(width: 180, height: 16)
-                        SkeletonLine(width: nil, height: 14)
-                        SkeletonLine(width: 200, height: 14)
+                        .padding(AppTheme.padding)
+                        .background(AppTheme.card)
+                        .cornerRadius(AppTheme.cornerRadius)
+                        .shadow(color: Color.black.opacity(0.05), radius: 5, y: 2)
                     }
-                    .padding()
-                    .background(AppTheme.card)
-                    .cornerRadius(12)
-                    .shadow(color: Color.black.opacity(0.05), radius: 5, y: 2)
+                }
+                
+                // Insights List
+                LazyVStack(spacing: 16) {
+                    ForEach(0..<4) { _ in
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                SkeletonLine(width: 140, height: 16) // Title
+                                Spacer()
+                                SkeletonBox(width: 60, height: 20, cornerRadius: 8) // Priority Pill
+                            }
+                            
+                            SkeletonLine(width: 180, height: 14) // Message line 1
+                            SkeletonLine(width: 120, height: 14) // Message line 2
+                        }
+                        .padding(AppTheme.padding)
+                        .background(AppTheme.card)
+                        .cornerRadius(AppTheme.cornerRadius)
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, y: 4)
+                    }
                 }
             }
             .padding()
@@ -532,6 +631,7 @@ struct NotificationListSkeleton: View {
                 }
                 .padding(.vertical, 4)
                 .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
         }
         .listStyle(.plain)

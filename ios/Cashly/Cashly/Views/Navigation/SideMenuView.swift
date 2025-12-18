@@ -60,9 +60,17 @@ struct SideMenuView: View {
                         Text(user.fullName)
                           .font(.headline)
                           .foregroundColor(.primary)
-                        Text(user.email)
-                          .font(.caption)
-                          .foregroundColor(.secondary)
+                        
+                        // Show email or phone as subtitle
+                        if let email = user.email {
+                            Text(email)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else if let phone = user.phoneNumber {
+                             Text(phone)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                       }
                     }
                   } else {
@@ -208,14 +216,8 @@ struct TopNavBar: View {
 
 struct CashlyHeader: View {
   var body: some View {
-    HStack(spacing: 12) {
-      Text("Cashly")
-        .font(.system(size: 24, weight: .bold))
-      Image("AppLogo")
-        .resizable()
-        .scaledToFit()
-        .frame(width: 32, height: 32)
-        .cornerRadius(8)
-    }
+    Text("Cashly")
+      .font(.system(size: 28, weight: .bold, design: .serif))
+      .foregroundStyle(AppTheme.primary)
   }
 }

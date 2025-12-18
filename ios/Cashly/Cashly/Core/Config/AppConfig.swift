@@ -6,9 +6,8 @@ enum AppConfig {
     /// Base URL for the Django backend API
     static var apiBaseURL: String {
         #if DEBUG
-        // For iOS Simulator, use localhost
-        // For physical device, use your Mac's IP address
-        return "http://192.168.1.42:8000"
+        // For iOS Simulator, use localhost which maps to the host machine
+        return "http://127.0.0.1:8000"
         #else
         // Production URL
         return "https://api.cashly.com"

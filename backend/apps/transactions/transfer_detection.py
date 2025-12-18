@@ -1,6 +1,7 @@
 """
 Transfer detection and matching algorithm.
 """
+
 from django.db.models import Q
 from django.utils import timezone
 from datetime import timedelta
@@ -14,18 +15,18 @@ logger = logging.getLogger(__name__)
 def detect_transfers(user, lookback_days=30):
     """
     Detect and match transfers between user's accounts.
-    
+
     A transfer is identified when:
     - Two transactions happen within 2 days of each other
     - Amounts are equal (or very close, within $0.50)
     - One is positive (income), one is negative (expense)
     - Both belong to the same user
     - Accounts are different
-    
+
     Args:
         user: User object
         lookback_days: Number of days to look back
-    
+
     Returns:
         dict: {
             'matched_pairs': List of matched transfer pairs,
@@ -33,62 +34,81 @@ def detect_transfers(user, lookback_days=30):
         }
     """
     start_date = timezone.now().date() - timedelta(days=lookback_days)
-    
+
     # Get all transactions in the period
-    transactions = Transaction.objects.filter(
-        user=user,
-        date__gte=start_date
-    ).select_related('account').order_by('date')
-    
+    # Optimization: Select related category to avoid N+1
+    transactions = (
+        Transaction.objects.filter(user=user, date__gte=start_date)
+        .select_related("account", "category")
+        .order_by("date")
+    )
+
+    # helper to check if transaction should be considered for transfer matching
+    def is_candidate(t):
+        # If it's already marked as transfer, it's a candidate (we might be re-matching)
+        if t.is_transfer:
+            return True
+        # If it has no category, it's a candidate
+        if not t.category:
+            return True
+        # If it has a category, only consider it if it's explicitly a "Transfer" category
+        # This protects "Uber" (Travel) etc. from being overwritten
+        return t.category.name.lower() == "transfer"
+
+    # Filter transactions
+    candidates = [t for t in transactions if is_candidate(t)]
+
     # Separate into income and expenses
-    expenses = [t for t in transactions if t.amount < 0]
-    income = [t for t in transactions if t.amount > 0]
-    
+    expenses = [t for t in candidates if t.amount < 0]
+    income = [t for t in candidates if t.amount > 0]
+
     matched_pairs = []
     matched_transaction_ids = set()
-    
+
     for expense in expenses:
         if expense.transaction_id in matched_transaction_ids:
             continue
-        
+
         expense_amount = abs(expense.amount)
-        
+
         # Look for matching income within 2 days
         for income_tx in income:
             if income_tx.transaction_id in matched_transaction_ids:
                 continue
-            
+
             # Check if amounts are close enough (within $0.50)
-            if abs(income_tx.amount - expense_amount) <= Decimal('0.50'):
+            if abs(income_tx.amount - expense_amount) <= Decimal("0.50"):
                 # Check if dates are within 2 days
                 date_diff = abs((income_tx.date - expense.date).days)
                 if date_diff <= 2:
                     # Check if accounts are different
                     if expense.account_id != income_tx.account_id:
                         # Found a transfer!
-                        matched_pairs.append({
-                            'from_transaction_id': str(expense.transaction_id),
-                            'to_transaction_id': str(income_tx.transaction_id),
-                            'from_account': expense.account.institution_name,
-                            'to_account': income_tx.account.institution_name,
-                            'amount': float(expense_amount),
-                            'date': str(expense.date),
-                            'date_diff_days': date_diff,
-                        })
-                        
+                        matched_pairs.append(
+                            {
+                                "from_transaction_id": str(expense.transaction_id),
+                                "to_transaction_id": str(income_tx.transaction_id),
+                                "from_account": expense.account.institution_name,
+                                "to_account": income_tx.account.institution_name,
+                                "amount": float(expense_amount),
+                                "date": str(expense.date),
+                                "date_diff_days": date_diff,
+                            }
+                        )
+
                         matched_transaction_ids.add(expense.transaction_id)
                         matched_transaction_ids.add(income_tx.transaction_id)
                         break  # Found match for this expense
-    
+
     # Mark matched transactions as transfers
     if matched_transaction_ids:
-        Transaction.objects.filter(
-            transaction_id__in=matched_transaction_ids
-        ).update(is_transfer=True, user_modified=False)
-    
+        Transaction.objects.filter(transaction_id__in=matched_transaction_ids).update(
+            is_transfer=True, user_modified=False
+        )
+
     return {
-        'matched_pairs': matched_pairs,
-        'updated_count': len(matched_transaction_ids)
+        "matched_pairs": matched_pairs,
+        "updated_count": len(matched_transaction_ids),
     }
 
 
@@ -98,19 +118,19 @@ def auto_categorize_transfer(transaction):
     Sets is_transfer=True and assigns a 'Transfer' category if available.
     """
     from .models import Category
-    
+
     transaction.is_transfer = True
-    
+
     # Try to find or create a Transfer category
     transfer_category = Category.objects.filter(
-        Q(is_system_category=True, name__iexact='transfer') |
-        Q(user=transaction.user, name__iexact='transfer')
+        Q(is_system_category=True, name__iexact="transfer")
+        | Q(user=transaction.user, name__iexact="transfer")
     ).first()
-    
+
     if transfer_category:
         transaction.category = transfer_category
-    
-    transaction.save(update_fields=['is_transfer', 'category', 'updated_at'])
+
+    transaction.save(update_fields=["is_transfer", "category", "updated_at"])
     return transaction
 
 
@@ -121,34 +141,36 @@ def find_potential_transfer_pairs(transaction, max_results=5):
     # Determine search criteria
     is_expense = transaction.amount < 0
     target_amount = abs(transaction.amount)
-    
+
     # Search for opposite type transactions
-    potential_matches = Transaction.objects.filter(
-        user=transaction.user,
-        date__gte=transaction.date - timedelta(days=2),
-        date__lte=transaction.date + timedelta(days=2),
-    ).exclude(
-        transaction_id=transaction.transaction_id
-    ).exclude(
-        account=transaction.account  # Different account
+    potential_matches = (
+        Transaction.objects.filter(
+            user=transaction.user,
+            date__gte=transaction.date - timedelta(days=2),
+            date__lte=transaction.date + timedelta(days=2),
+        )
+        .exclude(transaction_id=transaction.transaction_id)
+        .exclude(
+            account=transaction.account  # Different account
+        )
     )
-    
+
     if is_expense:
         # Looking for income (positive amount)
         potential_matches = potential_matches.filter(
             amount__gt=0,
-            amount__gte=target_amount - Decimal('0.50'),
-            amount__lte=target_amount + Decimal('0.50'),
+            amount__gte=target_amount - Decimal("0.50"),
+            amount__lte=target_amount + Decimal("0.50"),
         )
     else:
         # Looking for expense (negative amount)
         potential_matches = potential_matches.filter(
             amount__lt=0,
-            amount__gte=-(target_amount + Decimal('0.50')),
-            amount__lte=-(target_amount - Decimal('0.50')),
+            amount__gte=-(target_amount + Decimal("0.50")),
+            amount__lte=-(target_amount - Decimal("0.50")),
         )
-    
-    return list(potential_matches.select_related('account')[:max_results])
+
+    return list(potential_matches.select_related("account")[:max_results])
 
 
 def mark_as_transfer_pair(transaction1, transaction2):
@@ -157,10 +179,10 @@ def mark_as_transfer_pair(transaction1, transaction2):
     """
     transaction1.is_transfer = True
     transaction1.user_modified = True
-    transaction1.save(update_fields=['is_transfer', 'user_modified', 'updated_at'])
-    
+    transaction1.save(update_fields=["is_transfer", "user_modified", "updated_at"])
+
     transaction2.is_transfer = True
     transaction2.user_modified = True
-    transaction2.save(update_fields=['is_transfer', 'user_modified', 'updated_at'])
-    
+    transaction2.save(update_fields=["is_transfer", "user_modified", "updated_at"])
+
     return (transaction1, transaction2)

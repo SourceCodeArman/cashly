@@ -19,7 +19,8 @@ import {
     ChevronDown,
     ChevronUp,
     Calendar,
-    Info
+    Info,
+    Sparkles
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Insight, InsightType, InsightPriority } from '@/types/insight.types';
@@ -49,6 +50,8 @@ const getInsightIcon = (type: InsightType) => {
             return TrendingDown;
         case 'budget_insight':
             return Lightbulb;
+        case 'ai_recommendation':
+            return Sparkles;
         default:
             return Lightbulb;
     }
@@ -83,6 +86,8 @@ const getIconBackgroundColor = (type: InsightType) => {
             return 'bg-orange-500/10 text-orange-500';
         case 'budget_insight':
             return 'bg-amber-500/10 text-amber-500';
+        case 'ai_recommendation':
+            return 'bg-violet-500/10 text-violet-500';
         default:
             return 'bg-muted text-muted-foreground';
     }
@@ -104,6 +109,8 @@ const getInsightTypeLabel = (type: InsightType) => {
             return 'Spending Trend';
         case 'budget_insight':
             return 'Budget Insight';
+        case 'ai_recommendation':
+            return 'Ai Recommendation';
         default:
             return 'Insight';
     }
@@ -120,9 +127,28 @@ const formatMetadataValue = (key: string, value: unknown): string => {
         return value.toString();
     }
     if (typeof value === 'string') {
+        // Check for date keys or ISO format
+        if (key.includes('date') || key.includes('generated_at') || key.includes('expires_at')) {
+            const date = new Date(value);
+            if (!isNaN(date.getTime())) {
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
+            }
+        }
         return value;
     }
     return JSON.stringify(value);
+};
+
+const formatMetadataKey = (key: string): string => {
+    // Convert snake_case to Title Case
+    return key
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
 };
 
 
@@ -312,12 +338,13 @@ export function InsightCard({
                                                 // Skip arrays and certain keys
                                                 if (Array.isArray(value)) return null;
 
+                                                const formattedKey = formatMetadataKey(key);
                                                 const formattedValue = formatMetadataValue(key, value);
+
                                                 return (
-                                                    <div key={idx} className="text-sm">
-                                                        <span className="ml-1 font-medium">
-                                                            {formattedValue}
-                                                        </span>
+                                                    <div key={idx} className="flex justify-between items-center text-sm p-2 bg-background/50 rounded border border-border/50">
+                                                        <span className="text-muted-foreground">{formattedKey}</span>
+                                                        <span className="font-medium">{formattedValue}</span>
                                                     </div>
                                                 );
                                             })}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -15,6 +15,8 @@ import { toast } from 'sonner'
 import type { ApiResponse } from '@/types'
 import { mapAuthUser } from '@/lib/mapAuthUser'
 import { formatApiError } from '@/lib/formatApiError'
+import { supabase } from '@/utils/supabaseClient'
+import type { LoginResponse } from '@/services/authService'
 
 import { Logo } from '@/components/Logo'
 
@@ -22,14 +24,18 @@ const registerSchema = z
   .object({
     first_name: z.string().min(1, 'First name is required'),
     last_name: z.string().min(1, 'Last name is required'),
-    email: z.string().email('Invalid email address'),
-    username: z.string().min(3, 'Username must be at least 3 characters').max(30, 'Username must be less than 30 characters'),
+    email: z.string().email('Invalid email address').optional().or(z.literal('')),
+    phone_number: z.string().optional().or(z.literal('')),
     password: z.string().min(8, 'Password must be at least 8 characters'),
     password_confirm: z.string().min(8, 'Please confirm your password'),
   })
   .refine((data) => data.password === data.password_confirm, {
     message: "Passwords don't match",
     path: ['password_confirm'],
+  })
+  .refine((data) => data.email || data.phone_number, {
+    message: "Either email or phone number is required",
+    path: ['email'],
   })
 
 type RegisterForm = z.infer<typeof registerSchema>
@@ -50,13 +56,71 @@ export function Register() {
     resolver: zodResolver(registerSchema),
   })
 
+  // Handle Supabase OAuth Redirect
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        handleSupabaseExchange(session.access_token)
+      }
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        handleSupabaseExchange(session.access_token)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const handleSupabaseExchange = async (token: string) => {
+    try {
+      const response = await authService.googleLogin(token)
+      if (response.status === 'success' && response.data) {
+        await handleLoginSuccess(response.data)
+        await supabase.auth.signOut()
+      }
+    } catch (err) {
+      console.error("Google Backend Exchange Error", err)
+    }
+  }
+
+  const handleLoginSuccess = async (data: LoginResponse) => {
+    const { access, refresh, user } = data
+    if (access && refresh) setTokens(access, refresh)
+    if (user) {
+      const mappedUser = mapAuthUser(user)
+      setUser(mappedUser)
+      const isAdmin = mappedUser.isSuperuser || mappedUser.isAdmin
+      navigate(isAdmin ? '/admin' : '/dashboard', { replace: true })
+    }
+    toast.success('Welcome to Cashly!')
+  }
+
+  const handleGoogleLogin = async () => {
+    setIsLoading(true)
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin + '/login', // Redirect to login page is fine, or register page
+        }
+      })
+      if (error) throw error
+    } catch (error) {
+      console.error(error)
+      toast.error('Failed to initiate Google Login')
+      setIsLoading(false)
+    }
+  }
+
   const onSubmit = async (data: RegisterForm) => {
     setIsLoading(true)
     try {
       // Register the user
       const response = await authService.register({
-        email: data.email,
-        username: data.username,
+        email: data.email || undefined,
+        phone_number: data.phone_number || undefined,
         password: data.password,
         password_confirm: data.password_confirm,
         first_name: data.first_name,
@@ -69,7 +133,7 @@ export function Register() {
         // Auto-login after successful registration
         try {
           const loginResponse = await authService.login({
-            email: data.email,
+            login: data.email || data.phone_number || '',
             password: data.password,
           })
 
@@ -156,6 +220,27 @@ export function Register() {
             </p>
           </div>
 
+          <div className="mb-6">
+            <Button
+              type="button"
+              onClick={handleGoogleLogin}
+              className="w-full h-14 rounded-full border border-[#1A1A1A]/10 bg-white hover:bg-gray-50 text-[#1A1A1A] font-bold flex items-center justify-center gap-3 transition-all"
+              disabled={isLoading}
+            >
+              <svg role="img" viewBox="0 0 24 24" className="h-5 w-5" xmlns="http://www.w3.org/2000/svg"><title>Google</title><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" /></svg>
+              Continue with Google
+            </Button>
+
+            <div className="relative my-8">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-[#1A1A1A]/10"></span>
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-[#FDFCF8] px-2 text-[#1A1A1A]/40">Or</span>
+              </div>
+            </div>
+          </div>
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -204,17 +289,17 @@ export function Register() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="username" className="text-sm font-semibold text-[#1A1A1A]">Username</Label>
+              <Label htmlFor="phone_number" className="text-sm font-semibold text-[#1A1A1A]">Phone Number (Optional)</Label>
               <Input
-                id="username"
-                type="text"
-                placeholder="johndoe"
-                {...register('username')}
+                id="phone_number"
+                type="tel"
+                placeholder="+1234567890"
+                {...register('phone_number')}
                 disabled={isLoading}
                 className="h-12 rounded-xl border-[#1A1A1A]/10 focus:border-[#1A1A1A] bg-transparent"
               />
-              {errors.username && (
-                <p className="text-sm text-red-500">{errors.username.message}</p>
+              {errors.phone_number && (
+                <p className="text-sm text-red-500">{errors.phone_number.message}</p>
               )}
             </div>
 

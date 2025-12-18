@@ -110,6 +110,10 @@ actor APIClient {
                 do {
                     return try decoder.decode(T.self, from: data)
                 } catch {
+                    print("Decoding error for endpoint \(endpoint): \(error)")
+                    if let responseString = String(data: data, encoding: .utf8) {
+                        print("Response body: \(responseString)")
+                    }
                     throw APIError.decodingError(error)
                 }
                 

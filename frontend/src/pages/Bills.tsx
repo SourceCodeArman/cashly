@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, Filter, Play, Loader2, Repeat } from 'lucide-react'
+import { Plus, Filter, Play, Loader2, Repeat, Calendar as CalendarIcon, AlertCircle } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,17 +16,16 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { BillCard } from '@/components/bills/BillCard'
 import { BillModal } from '@/components/bills/BillModal'
-import { UpcomingBillsWidget } from '@/components/bills/UpcomingBillsWidget'
 import { RecurringGroupCard } from '@/components/RecurringGroupCard'
 import { useBills, useUpcomingBills, useOverdueBills } from '@/hooks/useBills'
 import { useTransactions } from '@/hooks/useTransactions'
 import { transactionService } from '@/services/transactionService'
 import { SkeletonCard } from '@/components/common/SkeletonCard'
 import { EmptyState } from '@/components/common/EmptyState'
-import { Calendar as CalendarIcon } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { toast } from 'sonner'
 import { PageHeader } from "@/components/PageHeader"
+import { format, parseISO } from 'date-fns'
 
 export default function Bills() {
     const [searchParams, setSearchParams] = useSearchParams()
@@ -47,7 +46,7 @@ export default function Bills() {
         is_active: filter === 'active' ? true : undefined,
         is_overdue: filter === 'overdue' ? true : undefined
     })
-    const { data: upcomingBills, isLoading: isLoadingUpcoming } = useUpcomingBills(7)
+    const { data: upcomingBills } = useUpcomingBills(7)
     const { data: overdueBills } = useOverdueBills()
 
     // Recurring transactions data
@@ -214,33 +213,82 @@ export default function Bills() {
 
                 {/* Manual Bills Tab */}
                 <TabsContent value="manual" className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="md:col-span-2 space-y-6">
-                            {/* Summary Stats */}
-                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                                <div className="bg-card rounded-xl border p-4 shadow-sm">
-                                    <div className="text-sm font-medium text-muted-foreground mb-1">Total Monthly</div>
-                                    <div className="text-2xl font-bold">${totalMonthly.toFixed(2)}</div>
-                                </div>
-                                <div className="bg-card rounded-xl border p-4 shadow-sm">
-                                    <div className="text-sm font-medium text-muted-foreground mb-1">Active Bills</div>
-                                    <div className="text-2xl font-bold">{bills?.length || 0}</div>
-                                </div>
-                                <div className="bg-card rounded-xl border p-4 shadow-sm">
-                                    <div className="text-sm font-medium text-muted-foreground mb-1">Overdue</div>
-                                    <div className={`text-2xl font-bold ${(overdueBills?.length || 0) > 0 ? 'text-red-500' : ''}`}>
-                                        {overdueBills?.length || 0}
-                                    </div>
+                    <div className="space-y-6">
+                        {/* Top Dashboard: Unified Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 isolate">
+                            {/* 1. Upcoming Bills Header (Top Left of L) */}
+                            <div className="bg-card rounded-xl border p-6 shadow-sm flex flex-col justify-center relative z-20 
+                                lg:rounded-b-none lg:border-b-0 lg:pb-6 lg:mb-0 
+                                lg:after:content-[''] lg:after:absolute lg:after:-bottom-[calc(1.5rem+1px)] lg:after:-left-[1px] lg:after:-right-[1px] lg:after:h-[calc(1.5rem+1px)] lg:after:bg-card lg:after:border-x lg:after:border-border">
+                                <div className="text-sm font-medium text-muted-foreground mb-2">Upcoming Bills</div>
+                                <div className="text-3xl font-bold">{upcomingBills?.length || 0}</div>
+                            </div>
+
+                            {/* 2. Total Monthly */}
+                            <div className="bg-card rounded-xl border p-6 shadow-sm flex flex-col justify-center relative z-10">
+                                <div className="text-sm font-medium text-muted-foreground mb-2">Total Monthly</div>
+                                <div className="text-3xl font-bold">${totalMonthly.toFixed(2)}</div>
+                            </div>
+
+                            {/* 3. Active Bills */}
+                            <div className="bg-card rounded-xl border p-6 shadow-sm flex flex-col justify-center relative z-10">
+                                <div className="text-sm font-medium text-muted-foreground mb-2">Active Bills</div>
+                                <div className="text-3xl font-bold">{bills?.length || 0}</div>
+                            </div>
+
+                            {/* 4. Overdue */}
+                            <div className="bg-card rounded-xl border p-6 shadow-sm flex flex-col justify-center relative z-10">
+                                <div className="text-sm font-medium text-muted-foreground mb-2">Overdue</div>
+                                <div className={`text-3xl font-bold ${(overdueBills?.length || 0) > 0 ? 'text-red-500' : ''}`}>
+                                    {overdueBills?.length || 0}
                                 </div>
                             </div>
 
+                            {/* 5. Upcoming Bills List (Bottom Body of L) */}
+                            <div className="col-span-1 md:col-span-2 lg:col-span-4 bg-card rounded-xl border shadow-sm p-6 relative z-10 lg:rounded-tl-none">
+                                {upcomingBills && upcomingBills.length > 0 ? (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        {upcomingBills.map((bill) => (
+                                            <Card key={bill.billId} className="bg-muted/30 border shadow-sm">
+                                                <CardContent className="p-4 flex flex-col gap-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="text-sm font-medium line-clamp-1">{bill.name}</div>
+                                                        <div className={`p-1.5 rounded-full ${bill.isOverdue ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                            {bill.isOverdue ? <AlertCircle className="h-3 w-3" /> : <CalendarIcon className="h-3 w-3" />}
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-2xl font-bold">${bill.amount}</div>
+                                                        <div className={`text-xs ${bill.isOverdue ? 'text-red-500' : 'text-muted-foreground'}`}>
+                                                            Due {format(parseISO(bill.nextDueDate), 'MM/dd/yyyy')}
+                                                        </div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-8 text-muted-foreground">
+                                        No upcoming bills
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Main Content: Controls & List */}
+                        <div className="space-y-6 pt-4">
                             {/* Controls */}
-                            <div className="flex justify-between items-center">
-                                <h2 className="text-xl font-semibold">Your Bills</h2>
-                                <div className="flex items-center gap-2">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <div>
+                                    <h2 className="text-xl font-semibold">Your Bills</h2>
+                                    <p className="text-sm text-muted-foreground">
+                                        Manage and track your recurring payments
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
                                     <Filter className="h-4 w-4 text-muted-foreground" />
                                     <Select value={filter} onValueChange={(v: any) => setFilter(v)}>
-                                        <SelectTrigger className="w-[150px]">
+                                        <SelectTrigger className="w-full sm:w-[150px]">
                                             <SelectValue placeholder="Filter" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -252,9 +300,11 @@ export default function Bills() {
                                 </div>
                             </div>
 
-                            {/* List */}
+                            {/* Main Bills List */}
                             {isLoadingBills ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                    <SkeletonCard />
+                                    <SkeletonCard />
                                     <SkeletonCard />
                                     <SkeletonCard />
                                 </div>
@@ -271,16 +321,12 @@ export default function Bills() {
                                     onAction={filter !== 'overdue' ? () => setShowAddModal(true) : undefined}
                                 />
                             ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                     {bills?.map((bill) => (
                                         <BillCard key={bill.billId} bill={bill} />
                                     ))}
                                 </div>
                             )}
-                        </div>
-
-                        <div className="space-y-6">
-                            <UpcomingBillsWidget bills={upcomingBills || []} isLoading={isLoadingUpcoming} />
                         </div>
                     </div>
                 </TabsContent>

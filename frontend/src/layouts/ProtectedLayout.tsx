@@ -5,6 +5,7 @@ import { AppSidebar } from '@/components/AppSidebar'
 import { Header } from '@/components/Header'
 import { useUIStore } from '@/store/uiStore'
 import { useRealtimeNotifications } from '@/hooks/useRealtimeNotifications'
+import { ChatWidget } from '@/components/chat/ChatWidget'
 
 interface ProtectedLayoutProps {
   children: React.ReactNode
@@ -42,6 +43,7 @@ export function ProtectedLayout({ children }: ProtectedLayoutProps) {
         <main className="flex-1 overflow-y-auto bg-background p-6">
           <div className="mx-auto max-w-7xl">{children}</div>
         </main>
+        <ChatWidget />
       </div>
     </div>
   )

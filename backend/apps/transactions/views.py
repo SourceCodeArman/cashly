@@ -821,6 +821,13 @@ class CategoryViewSet(viewsets.ModelViewSet):
         if parent_only:
             queryset = queryset.filter(parent_category__isnull=True)
 
+        # Filter for categories that have transactions for this user
+        has_transactions = (
+            self.request.query_params.get("has_transactions", "false").lower() == "true"
+        )
+        if has_transactions:
+            queryset = queryset.filter(transactions__user=self.request.user).distinct()
+
         return queryset
 
     def get_serializer_class(self):
@@ -834,7 +841,9 @@ class CategoryViewSet(viewsets.ModelViewSet):
         from django.core.cache import cache
 
         user = request.user
-        cache_key = f"categories_list_user_{user.id}"
+        # Generate cache key based on params
+        params_key = "".join(f"{k}{v}" for k, v in sorted(request.query_params.items()))
+        cache_key = f"categories_list_user_{user.id}_{params_key}"
 
         # Try to get cached categories
         cached_data = cache.get(cache_key)

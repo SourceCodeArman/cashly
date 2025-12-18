@@ -9,7 +9,8 @@ export type InsightType =
     | 'savings_opportunity'
     | 'income_analysis'
     | 'spending_trend'
-    | 'budget_insight';
+    | 'budget_insight'
+    | 'ai_recommendation';
 
 export type InsightPriority = 'high' | 'medium' | 'low';
 

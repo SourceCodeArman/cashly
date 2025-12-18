@@ -46,7 +46,9 @@ export function AppSidebar() {
 
           {/* Other Group */}
           <div className="space-y-1 pt-4">
-            <NavLink to="/subscription" icon={Crown} label="Subscription" />
+            {import.meta.env.VITE_ENABLE_SUBSCRIPTION !== 'false' && (
+              <NavLink to="/subscription" icon={Crown} label="Subscription" />
+            )}
             <NavLink to="/notifications" icon={Bell} label="Notifications" />
             <NavLink to="/settings" icon={Settings} label="Settings" />
             <NavLink to="/docs" icon={BookOpen} label="Documentation" />

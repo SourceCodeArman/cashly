@@ -204,7 +204,7 @@ struct EditCategoryView: View {
             Text(categoryType.capitalized)
               .font(.subheadline)
               .fontWeight(.medium)
-              .foregroundStyle(type == categoryType ? .white : AppTheme.text)
+              .foregroundStyle(type == categoryType ? AppTheme.background : AppTheme.text)
               .padding(.horizontal, 20)
               .padding(.vertical, 12)
               .background(type == categoryType ? AppTheme.primary : AppTheme.background)

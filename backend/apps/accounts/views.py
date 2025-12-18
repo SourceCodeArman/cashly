@@ -12,6 +12,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Count
 from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
@@ -27,6 +29,7 @@ from .models import Account
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
+    GoogleLoginSerializer,
     UserSerializer,
     PasswordResetSerializer,
     PasswordResetConfirmSerializer,
@@ -112,7 +115,6 @@ class UserRegistrationView(generics.CreateAPIView):
                 "data": {
                     "id": user.id,
                     "email": user.email,
-                    "username": user.username,
                 },
                 "message": "User registered successfully",
             },
@@ -161,6 +163,28 @@ class UserLoginView(generics.GenericAPIView):
                 "message": "Login successful",
             },
             status=status.HTTP_200_OK,
+        )
+
+
+class GoogleLoginView(generics.GenericAPIView):
+    """
+    POST /api/v1/auth/google
+    Google Login via ID token.
+    """
+
+    serializer_class = GoogleLoginSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # TODO: Implement Google token verification
+        return Response(
+            {
+                "status": "error",
+                "message": "Google login is currently disabled.",
+            },
+            status=status.HTTP_501_NOT_IMPLEMENTED,
         )
 
 
@@ -221,21 +245,28 @@ class PasswordResetView(generics.GenericAPIView):
         serializer.is_valid(raise_exception=True)
 
         email = serializer.validated_data["email"]
-        user = User.objects.get(email=email)
+        try:
+            user = User.objects.get(email=email)
 
-        # Generate reset token
-        token = default_token_generator.make_token(user)
-        uid = urlsafe_base64_encode(force_bytes(user.pk))
+            # Generate reset token
+            token = default_token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
 
-        # Send email (in production, use proper email service)
-        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={token}&uid={uid}"
-        send_mail(
-            subject="Password Reset Request",
-            message=f"Click here to reset your password: {reset_url}",
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            fail_silently=False,
-        )
+            # Send email (in production, use proper email service)
+            reset_url = (
+                f"{settings.FRONTEND_URL}/reset-password?token={token}&uid={uid}"
+            )
+            send_mail(
+                subject="Password Reset Request",
+                message=f"Click here to reset your password: {reset_url}",
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[email],
+                fail_silently=False,
+            )
+        except User.DoesNotExist:
+            # For security reasons, we return success even if email doesn't exist
+            # This prevents email enumeration
+            pass
 
         return Response(
             {"status": "success", "data": None, "message": "Password reset email sent"},
@@ -750,9 +781,16 @@ class AccountViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """Return accounts for the current user (including inactive accounts)."""
-        return Account.objects.for_user(self.request.user).order_by(
-            "-created_at", "institution_name"
+        queryset = Account.objects.for_user(self.request.user)
+
+        # Filter for accounts that have transactions
+        has_transactions = (
+            self.request.query_params.get("has_transactions", "false").lower() == "true"
         )
+        if has_transactions:
+            queryset = queryset.filter(transactions__isnull=False).distinct()
+
+        return queryset.order_by("-created_at", "institution_name")
 
     def create(self, request, *args, **kwargs):
         """

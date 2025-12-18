@@ -5,7 +5,47 @@ Account models for Cashly.
 import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.base_user import BaseUserManager
 from django.utils import timezone
+
+
+class CustomUserManager(BaseUserManager):
+    """
+    Custom user manager where email is the unique identifiers
+    for authentication instead of usernames.
+    """
+
+    def create_user(self, email=None, phone_number=None, password=None, **extra_fields):
+        """
+        Create and save a User with the given email or phone number and password.
+        """
+        if not email and not phone_number:
+            raise ValueError("Either Email or Phone Number must be set")
+
+        if email:
+            email = self.normalize_email(email)
+
+        user = self.model(email=email, phone_number=phone_number, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, email, password=None, **extra_fields):
+        """
+        Create and save a Superuser with the given email and password.
+        """
+        extra_fields.setdefault("is_staff", True)
+        extra_fields.setdefault("is_superuser", True)
+
+        if extra_fields.get("is_staff") is not True:
+            raise ValueError("Superuser must have is_staff=True.")
+        if extra_fields.get("is_superuser") is not True:
+            raise ValueError("Superuser must have is_superuser=True.")
+
+        if email is None:
+            raise ValueError("Superuser must have an email.")
+
+        return self.create_user(email, password=password, **extra_fields)
 
 
 class User(AbstractUser):
@@ -13,8 +53,10 @@ class User(AbstractUser):
     Custom User model extending Django's AbstractUser.
     """
 
-    email = models.EmailField(unique=True, db_index=True)
-    phone_number = models.CharField(max_length=20, blank=True, null=True)
+    email = models.EmailField(unique=True, db_index=True, null=True, blank=True)
+    phone_number = models.CharField(
+        max_length=20, unique=True, db_index=True, null=True, blank=True
+    )
     preferences = models.JSONField(default=dict, blank=True)
     subscription_tier = models.CharField(
         max_length=20,
@@ -55,7 +97,10 @@ class User(AbstractUser):
     updated_at = models.DateTimeField(auto_now=True)
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["username"]
+    REQUIRED_FIELDS = []
+    username = None
+
+    objects = CustomUserManager()
 
     class Meta:
         db_table = "users"
@@ -63,7 +108,9 @@ class User(AbstractUser):
         verbose_name_plural = "Users"
 
     def __str__(self):
-        return self.email
+        if self.email:
+            return self.email
+        return self.phone_number or str(self.id)
 
     def has_active_subscription(self):
         """
@@ -145,7 +192,7 @@ class Account(models.Model):
 
     account_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="accounts")
-    institution_name = models.CharField(max_length=200)
+    institution_name = models.CharField(max_length=255)
     custom_name = models.CharField(
         max_length=200,
         blank=True,
@@ -154,7 +201,7 @@ class Account(models.Model):
     )
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES)
     account_number_masked = models.CharField(
-        max_length=20, help_text="Last 4 digits for display"
+        max_length=255, help_text="Last 4 digits for display"
     )
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     currency = models.CharField(max_length=3, default="USD")
@@ -334,7 +381,7 @@ class EmailChangeRequest(models.Model):
         ]
 
     def __str__(self):
-        return f"Email change for {self.user.username} to {self.new_email}"
+        return f"Email change for {self.user.email} to {self.new_email}"
 
     def is_expired(self):
         return timezone.now() > self.expires_at

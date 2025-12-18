@@ -2,13 +2,13 @@ import apiClient from './apiClient'
 import type { ApiResponse, User, PasswordChangeData } from '@/types'
 
 export interface LoginCredentials {
-  email: string
+  login: string
   password: string
 }
 
 export interface RegisterData {
-  email: string
-  username: string
+  email?: string
+  phone_number?: string
   password: string
   password_confirm: string
   first_name: string
@@ -20,8 +20,7 @@ export interface LoginResponse {
   access?: string
   user?: {
     id: number
-    email: string
-    username: string
+    email?: string
     is_superuser?: boolean
   }
   temp_token?: string
@@ -29,8 +28,8 @@ export interface LoginResponse {
 }
 
 export const authService = {
-  async register(userData: RegisterData): Promise<ApiResponse<{ id: number; email: string; username: string }>> {
-    const response = await apiClient.post<ApiResponse<{ id: number; email: string; username: string }>>(
+  async register(userData: RegisterData): Promise<ApiResponse<{ id: number; email?: string; phone_number?: string }>> {
+    const response = await apiClient.post<ApiResponse<{ id: number; email?: string; phone_number?: string }>>(
       '/auth/register/',
       userData
     )
@@ -41,6 +40,14 @@ export const authService = {
     const response = await apiClient.post<ApiResponse<LoginResponse>>(
       '/auth/login/',
       credentials
+    )
+    return response.data
+  },
+
+  async googleLogin(token: string): Promise<ApiResponse<LoginResponse>> {
+    const response = await apiClient.post<ApiResponse<LoginResponse>>(
+      '/auth/google/',
+      { access_token: token }
     )
     return response.data
   },

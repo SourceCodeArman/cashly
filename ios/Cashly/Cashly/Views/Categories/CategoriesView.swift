@@ -44,7 +44,6 @@ struct CategoriesView: View {
                 .font(.system(size: 20))
                 .foregroundStyle(AppTheme.primary)
                 .padding(8)
-                .background(AppTheme.primary.opacity(0.1))
                 .clipShape(Circle())
             }
 
@@ -55,7 +54,6 @@ struct CategoriesView: View {
                 .font(.system(size: 20))
                 .foregroundStyle(AppTheme.primary)
                 .padding(8)
-                .background(AppTheme.primary.opacity(0.1))
                 .clipShape(Circle())
             }
           }

@@ -2,7 +2,7 @@
 export * from './bill.types'
 export interface User {
   id: string
-  email: string
+  email?: string
   firstName: string
   lastName: string
   isAdmin: boolean

@@ -183,7 +183,7 @@ struct TransactionFilterView: View {
             Button(action: applyFilters) {
               Text("Apply Filters")
                 .frame(maxWidth: .infinity)
-                .foregroundColor(.white)
+                .foregroundColor(AppTheme.background)
             }
             .listRowBackground(AppTheme.primary)
 

@@ -11,6 +11,7 @@ from decimal import Decimal
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 
+
 User = get_user_model()
 
 
@@ -37,7 +38,7 @@ class DebtAccount(models.Model):
     debt_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="debts")
     name = models.CharField(
-        max_length=200, help_text="Debt name (e.g., Chase Credit Card)"
+        max_length=255, help_text="Debt name (e.g., Chase Credit Card)"
     )
     debt_type = models.CharField(
         max_length=20, choices=DEBT_TYPE_CHOICES, default="other"
@@ -78,10 +79,10 @@ class DebtAccount(models.Model):
     )
 
     creditor_name = models.CharField(
-        max_length=200, blank=True, help_text="Creditor/lender name"
+        max_length=255, blank=True, help_text="Creditor/lender name"
     )
     account_number_masked = models.CharField(
-        max_length=20, blank=True, help_text="Last 4 digits"
+        max_length=255, blank=True, help_text="Last 4 digits"
     )
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active")

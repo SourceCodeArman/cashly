@@ -5,7 +5,7 @@ struct BillsView: View {
   @State private var isLoading = false
 
   var body: some View {
-    ZStack {
+    ZStack(alignment: .top) {
       AppTheme.background
         .ignoresSafeArea()
 
@@ -25,12 +25,16 @@ struct BillsView: View {
         List {
           if isLoading && bills.isEmpty {
             BillListSkeleton()
+              .listRowBackground(Color.clear)
+              .listRowSeparator(.hidden)
           } else if bills.isEmpty {
             EmptyStateView(
               icon: "doc.text.fill",
               title: "No Bills",
               message: "You don't have any upcoming bills."
             )
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
           } else {
             ForEach(bills) { bill in
               BillRow(bill: bill)
