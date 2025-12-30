@@ -1,4 +1,4 @@
-# Cashly
+# Cashly [![wakatime](https://wakatime.com/badge/user/4a2c04a0-e17f-4c55-8202-8dcc0ed8e240/project/8bd9963b-e9f6-4d9c-bc05-91e1760eb5cf.svg)](https://wakatime.com/badge/user/4a2c04a0-e17f-4c55-8202-8dcc0ed8e240/project/8bd9963b-e9f6-4d9c-bc05-91e1760eb5cf)
 
 A personal finance management application built with Django and React, featuring automated transaction tracking, intelligent categorization, goal-oriented savings, subscription management, and real-time notifications.
 
